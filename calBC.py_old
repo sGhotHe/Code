@@ -1,0 +1,475 @@
+####################################################################################
+# INTRODUCTION:
+# This code is to do some Black Carbon BC calculation, including MAC, Eabs and mass distribution
+# Created by Hebs at 21/11/1/15:43
+# Contact: hebishuo@pku.edu.cn
+####################################################################################
+
+import numpy as np
+import PyMieScatt as ps
+import calPNSD
+import readSP2
+
+'''
+some parameter:
+m_EC = 2.26+1.26j
+m_air = 1
+rho_EC = 1.8 # g/cm^3
+rho_air = 1.293e-3 # g/cm^3
+m_BC = m_EC * (1-V_air) + m_air * V_air
+rho_BC = rho_BC * (1-V_air) + rho_air * V_air
+avg_m_BC = 1.67+0.67j
+'''
+
+def cal_ksca_internal(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell, wv):
+	'''
+	This function is to use SMPS and SP2 data to calculate scattering coefficient, using internal mixing hypothesis
+	input:
+		Dps     : particle diameter size, array, nm
+		PNSD    : particle number size distribution, array, dn/dlogDp
+		DBC     : BC particle diameter size, array, nm
+		BCPNSD  : BC particle number size distribution, array, cm^-3
+		m_BC    : BC core complex refractive index
+		m_shell : shell complex refractive index
+		wv      : wave length, nm
+	output:
+		k       : scattering coefficient
+	'''
+	#consider BCPNSD have same distribution in each Dps
+	#Dps_min, D_BCmin, D_BCmax, Dps_max, have same interval in each bin and total bulk
+	#Dps smaller than D_BCmin and bigger than D_BCmax, have no BC core
+	Dps_min = Dps[0]
+	Dps_max = Dps[-1]
+	DBC_min = DBC[0]
+	DBC_max = DBC[-1]
+	n = calPNSD.PNSD2n(Dps, PNSD)
+	dlogDBC = calPNSD.cal_dlogDp(DBC)
+	
+	DBC_core = np.zeros((len(Dps),len(DBC)))
+	n_BC = np.zeros((len(Dps),len(DBC)))
+	n_noBC = np.zeros(len(Dps))
+	k = 0
+	
+	for i in range(len(Dps)):
+		if Dps[i]>=DBC_min and Dps[i]<=DBC_max: # BC core exist
+			#need to find different subscript but same size Dps and DBC
+			ii = 0
+			while ii<len(DBC) and DBC[ii]<Dps[i]:
+				ii += 1
+			if ii<len(DBC): # have matched subscript
+				DBC_core[i] = (DBC-Dps_min) * Dps[i] / (Dps_max-Dps_min)
+				n_BC[i] = BCPNSD * dlogDBC * BCPNSD[ii]**3 / sum(BCPNSD**3) # conservation of mass, cm^-3
+			
+				for j in range(len(DBC)): # core-shell structure
+					Qsca_BCij = ps.MieQCoreShell(m_BC, m_shell, wv, DBC_core[i,j], Dps[i])[1]
+					k += Qsca_BCij * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_BC[i,j]*1e6
+		
+		Qsca_noBCi = ps.MieQ(m_shell, wv, Dps[i])[1]
+		n_noBC[i] = n[i] - sum(n_BC[i])
+		k += Qsca_noBCi * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_noBC[i]*1e6 # m^-1
+	
+	k = k * 1e6 # Mm^-1
+	return k
+
+def cal_ksca_external(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell, wv):
+	'''
+	This function is to use SMPS and SP2 data to calculate scattering coefficient, using external mixing hypothesis
+	input:
+		Dps     : particle diameter size, array, nm
+		PNSD    : particle number size distribution, array, dn/dlogDp
+		DBC     : BC particle diameter size, array, nm
+		BCPNSD  : BC particle number size distribution, array, dn/dlogDBC
+		m_BC    : BC core complex refractive index
+		m_shell : shell complex refractive index
+		wv      : wave length, nm
+	output:
+		k       : scattering coefficient
+	'''
+	Dps_min = Dps[0]
+	Dps_max = Dps[-1]
+	DBC_min = DBC[0]
+	DBC_max = DBC[-1]
+	n = calPNSD.PNSD2n(Dps, PNSD)
+	dlogDBC = calPNSD.cal_dlogDp(DBC)
+	
+	DBC_core = np.zeros(len(Dps))
+	n_BC = np.zeros(len(Dps))
+	n_noBC = np.zeros(len(Dps))
+	k = 0
+	
+	for i in range(len(Dps)):
+		if Dps[i]>=DBC_min and Dps[i]<=DBC_max: # BC core exist
+			ii = 0
+			while ii<len(DBC) and DBC[ii]<Dps[i]:
+				ii += 1
+			if ii<len(DBC): # have matched subscript
+				# different with internal mixture
+				DBC_core[i] = DBC[ii]
+				n_BC[i] = BCPNSD[ii] * dlogDBC # cm^-3
+				Qsca_BCi = ps.MieQ(m_BC, wv, DBC_core[i])[1]
+				k += Qsca_BCi * 1/4 * np.pi * (DBC_core[i]*1e-9)**2 * n_BC[i]*1e6 # m^-1
+		
+		Qsca_noBCi = ps.MieQ(m_shell, wv, Dps[i])[1]
+		n_noBC[i] = n[i] - n_BC[i]
+		k += Qsca_noBCi * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_noBC[i]*1e6 # m^-1
+	
+	k = k * 1e6 # Mm^-1
+	return k
+
+def cal_ksca_mixternal(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell, wv, mix_ratio):
+	'''
+	This function is to use SMPS and SP2 data to calculate scattering coefficient, using both internal and external mixing hypothesis
+	input:
+		Dps       : particle diameter size, array, nm
+		PNSD      : particle number size distribution, array, dn/dlogDp
+		DBC       : BC particle diameter size, array, nm
+		BCPNSD    : BC particle number size distribution, array, dn/dlogDBC
+		m_BC      : BC core complex refractive index
+		m_shell   : shell complex refractive index
+		wv        : wave length, nm
+		mix_ratio : internal and external mixing ratio, defined as internal_part/total
+	output:
+		k         : scattering coefficient
+	'''
+	Dps_min = Dps[0]
+	Dps_max = Dps[-1]
+	DBC_min = DBC[0]
+	DBC_max = DBC[-1]
+	n = calPNSD.PNSD2n(Dps, PNSD)
+	dlogDBC = calPNSD.cal_dlogDp(DBC)
+	
+	DBC_core_int = np.zeros((len(Dps),len(DBC)))
+	DBC_core_ext = np.zeros(len(Dps))
+	n_BC_int = np.zeros((len(Dps),len(DBC)))
+	n_BC_ext = np.zeros(len(Dps))
+	n_noBC = np.zeros(len(Dps))
+	k = 0
+	
+	for i in range(len(Dps)):
+		if Dps[i]>=DBC_min and Dps[i]<=DBC_max: # BC core exist
+			#need to find different subscript but same size Dps and DBC
+			ii = 0
+			while ii<len(DBC) and DBC[ii]<Dps[i]:
+				ii += 1
+			if ii<len(DBC): # have matched subscript
+				#one part for internal, another for external
+				DBC_core_int[i] = (DBC-Dps_min) * Dps[i] / (Dps_max-Dps_min)
+				n_BC_int[i] = BCPNSD * dlogDBC * BCPNSD[ii]**3 / sum(BCPNSD**3) * mix_ratio # conservation of mass, cm^-3
+				DBC_core_ext[i] = DBC[ii]
+				n_BC_ext[i] = BCPNSD[ii] * dlogDBC * (1-mix_ratio) # cm^-3
+				#internal mixing scattering coefficient calculating:
+				for j in range(len(DBC)): # core-shell structure
+					Qsca_BCij = ps.MieQCoreShell(m_BC, m_shell, wv, DBC_core_int[i,j], Dps[i])[1]
+					k += Qsca_BCij * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_BC_int[i,j]*1e6
+				#external mixing scattering coefficient calculating:
+				Qsca_BCi = ps.MieQ(m_BC, wv, DBC_core_ext[i])[1]
+				k += Qsca_BCi * 1/4 * np.pi * (DBC_core_ext[i]*1e-9)**2 * n_BC_ext[i]*1e6 # m^-1
+		
+		Qsca_noBCi = ps.MieQ(m_shell, wv, Dps[i])[1]
+		n_noBC[i] = n[i] - sum(n_BC_int[i]) - n_BC_ext[i]
+		k += Qsca_noBCi * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_noBC[i]*1e6 # m^-1
+	
+	k = k * 1e6 # Mm^-1
+	return k
+
+def cal_kabs_internal(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell, wv):
+	'''
+	This function is to use SMPS and SP2 data to calculate absorbing coefficient, using internal mixing hypothesis
+	input:
+		Dps     : particle diameter size, array, nm
+		PNSD    : particle number size distribution, array, dn/dlogDp
+		DBC     : BC particle diameter size, array, nm
+		BCPNSD  : BC particle number size distribution, array, dn/dlogDBC
+		m_BC    : BC core complex refractive index
+		m_shell : shell complex refractive index
+		wv      : wave length, nm
+	output:
+		k       : absorbing coefficient
+	'''
+	Dps_min = Dps[0]
+	Dps_max = Dps[-1]
+	DBC_min = DBC[0]
+	DBC_max = DBC[-1]
+	n = calPNSD.PNSD2n(Dps, PNSD) # particle number concentration, cm^-3
+	
+	# first have to fit DBC to Dps
+	BCPNSD_fit = np.zeros(len(Dps))
+	for i in range(len(Dps)):
+		j = 0 # to mark the fit DBC subscript
+		while j<len(DBC)-1:
+			if DBC[j]<=Dps[i] and DBC[j+1]>Dps[i]:
+				break
+			j += 1
+		if j<len(DBC)-1: # find the matched subscript
+			BCPNSD_fit[i] = BCPNSD[j] + (BCPNSD[j+1]-BCPNSD[j]) * (Dps[i]-DBC[j]) / (DBC[j+1]-DBC[j]) # linear interpolation
+	
+	DBC_core = np.zeros((len(Dps),len(Dps))) # every Dps bin BC core size distribution
+	n_BC = np.zeros((len(Dps),len(Dps))) # every Dps bin BC-core-have particle number concentration
+	n_noBC = np.zeros(len(Dps)) # no BC core particle number concentration
+	k = 0
+	
+	for i in range(len(Dps)):
+		if Dps[i]>=DBC_min and Dps[i]<=DBC_max: # BC core exist
+			DBC_core[i] = (Dps-Dps_min) * (Dps[i]-Dps_min) / (Dps_max-Dps_min) + Dps_min # linear transformation, align left
+			#######################################################################
+			#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			# conservation of mass: sumi(sumj(BCPNSD_core[i,j]**3)) = sumi(BCPNSD[i]**3)
+			#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			#######################################################################
+			#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			# same distribution shape: BCPNSD_core[i,j] = ratio[i] * BCPNSD_fit[j]
+			#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			#######################################################################
+			# ratio related to BCPNSD_fit[i]: ratio[i] = Const * BCPNSD_fit[i]
+			# => BCPNSD_core[i,j] = Const * BCPNSD_fit[i] * BCPNSD_fit[j]
+			# => Const**3 * sumi(sumj(BCPNSD_fit[i]**3*BCPNSD_fit[j]**3)) = sumi(BCPNSD_fit[i]**3)
+			# => Const = sumi(BCPNSD_fit[i]**3)**(1/3) / sumi(sumj(BCPNSD_fit[i]**3*BCPNSD_fit[j]**3))**(1/3)
+			# => BCPNSD_core[i,j] = sumi(BCPNSD_fit[i]**3)**(1/3) / sumi(sumj(BCPNSD_fit[i]**3*BCPNSD_fit[j]**3))**(1/3) * BCPNSD_fit[i] * BCPNSD_fit[j]
+			# => n_BC[i,j] = sumi(BCPNSD_fit[i]**3)**(1/3) / sumi(sumj(BCPNSD_fit[i]**3*BCPNSD_fit[j]**3))**(1/3) * dlogDps * BCPNSD_fit[i] * BCPNSD_fit[j]
+			BCPNSD_coreij = sum(BCPNSD_fit**3)**(1/3) / sum(BCPNSD_fit**3*sum(BCPNSD_fit**3))**(1/3) * BCPNSD_fit[i] * BCPNSD_fit
+			n_BC[i] = calPNSD.PNSD2n(Dps, BCPNSD_coreij)
+			
+			for j in range(len(Dps)): # core-shell structure
+				Qabs_BCij = ps.MieQCoreShell(m_BC, m_shell, wv, DBC_core[i,j], Dps[i])[2]
+				k += Qabs_BCij * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_BC[i,j]*1e6
+		#calculate no BC core particle absorbing contribution
+		Qabs_noBCi = ps.MieQ(m_shell, wv, Dps[i])[2]
+		n_noBC[i] = n[i] - sum(n_BC[i])
+		k += Qabs_noBCi * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_noBC[i]*1e6
+	
+	k = k * 1e6 # Mm^-1
+	return k
+
+def cal_kabs_external(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell, wv):
+	'''
+	This function is to use SMPS and SP2 data to calculate absorbing coefficient, using external mixing hypothesis
+	input:
+		Dps     : particle diameter size, array, nm
+		PNSD    : particle number size distribution, array, dn/dlogDp
+		DBC     : BC particle diameter size, array, nm
+		BCPNSD  : BC particle number size distribution, array, dn/dlogDBC
+		m_BC    : BC core complex refractive index
+		m_shell : shell complex refractive index
+		wv      : wave length, nm
+	output:
+		k       : absorbing coefficient
+	'''
+	Dps_min = Dps[0]
+	Dps_max = Dps[-1]
+	DBC_min = DBC[0]
+	DBC_max = DBC[-1]
+	n = calPNSD.PNSD2n(Dps, PNSD)
+	
+	BCPNSD_fit = np.zeros(len(Dps))
+	for i in range(len(Dps)):
+		j = 0 # to mark the fit DBC subscript
+		while j<len(DBC)-1:
+			if DBC[j]<=Dps[i] and DBC[j+1]>Dps[i]:
+				break
+			j += 1
+		if j<len(DBC)-1: # find the matched subscript
+			BCPNSD_fit[i] = BCPNSD[j] + (BCPNSD[j+1]-BCPNSD[j]) * (Dps[i]-DBC[j]) / (DBC[j+1]-DBC[j]) # linear interpolation
+	
+	n_BC = calPNSD.PNSD2n(Dps, BCPNSD_fit)
+	n_noBC = n - n_BC
+	k = 0
+	
+	for i in range(len(Dps)):
+		Qabs_BCi = ps.MieQ(m_BC, wv, Dps[i])[1]
+		k += Qabs_BCi * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_BC[i]*1e6 # m^-1
+		Qabs_noBCi = ps.MieQ(m_shell, wv, Dps[i])[1]
+		k += Qabs_noBCi * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_noBC[i]*1e6 # m^-1
+		'''
+		if Dps[i]>=DBC_min and Dps[i]<=DBC_max: # BC core exist
+			ii = 0
+			while ii<len(DBC) and DBC[ii]<Dps[i]:
+				ii += 1
+			if ii<len(DBC): # have matched subscript
+				# different with internal mixture
+				DBC_core[i] = DBC[ii]
+				n_BC[i] = BCPNSD[ii] * dlogDBC # cm^-3
+				Qabs_BCi = ps.MieQ(m_BC, wv, DBC_core[i])[1]
+				k += Qabs_BCi * 1/4 * np.pi * (DBC_core[i]*1e-9)**2 * n_BC[i]*1e6 # m^-1
+		'''
+	
+	k = k * 1e6 # Mm^-1
+	return k
+
+def cal_kabs_mixternal(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell, wv, mix_ratio):
+	'''
+	This function is to use SMPS and SP2 data to calculate absorbing coefficient, using both internal and external mixing hypothesis
+	input:
+		Dps       : particle diameter size, array, nm
+		PNSD      : particle number size distribution, array, dn/dlogDp
+		DBC       : BC particle diameter size, array, nm
+		BCPNSD    : BC particle number size distribution, array, dn/dlogDBC
+		m_BC      : BC core complex refractive index
+		m_shell   : shell complex refractive index
+		wv        : wave length, nm
+		mix_ratio : internal and external mixing ratio, defined as internal_part/total
+	output:
+		k         : absorbing coefficient
+	'''
+	Dps_min = Dps[0]
+	Dps_max = Dps[-1]
+	DBC_min = DBC[0]
+	DBC_max = DBC[-1]
+	n = calPNSD.PNSD2n(Dps, PNSD)
+	dlogDBC = calPNSD.cal_dlogDp(DBC)
+	
+	DBC_core_int = np.zeros((len(Dps),len(DBC)))
+	DBC_core_ext = np.zeros(len(Dps))
+	n_BC_int = np.zeros((len(Dps),len(DBC)))
+	n_BC_ext = np.zeros(len(Dps))
+	n_noBC = np.zeros(len(Dps))
+	k = 0
+	
+	for i in range(len(Dps)):
+		if Dps[i]>=DBC_min and Dps[i]<=DBC_max: # BC core exist
+			#need to find different subscript but same size Dps and DBC
+			ii = 0
+			while ii<len(DBC) and DBC[ii]<Dps[i]:
+				ii += 1
+			if ii<len(DBC): # have matched subscript
+				DBC_core_int[i] = (DBC-Dps_min) * Dps[i] / (Dps_max-Dps_min)
+				n_BC_int[i] = BCPNSD * dlogDBC * BCPNSD[ii]**3 / sum(BCPNSD**3) * mix_ratio # conservation of mass, cm^-3
+				DBC_core_ext[i] = DBC[ii]
+				n_BC_ext[i] = BCPNSD[ii] * dlogDBC * (1-mix_ratio) # cm^-3
+				
+				for j in range(len(DBC)): # core-shell structure
+					Qabs_BCij = ps.MieQCoreShell(m_BC, m_shell, wv, DBC_core_int[i,j], Dps[i])[2]
+					k += Qabs_BCij * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_BC_int[i,j]*1e6 # m^-1
+				
+				Qabs_BCi = ps.MieQ(m_BC, wv, DBC_core_ext[i])[2]
+				k += Qabs_BCi * 1/4 * np.pi * (DBC_core_ext[i]*1e-9)**2 * n_BC_ext[i]*1e6 # m^-1
+		
+		Qabs_noBCi = ps.MieQ(m_shell, wv, Dps[i])[2]
+		n_noBC[i] = n[i] - sum(n_BC_int[i]) - n_BC_ext[i]
+		k += Qabs_noBCi * 1/4 * np.pi * (Dps[i]*1e-9)**2 * n_noBC[i]*1e6 # m^-1
+	
+	k = k * 1e6 # Mm^-1
+	return k
+
+def ksca2mshell(Dps, PNSD, DBC, BCPNSD, m_BC, wv, k, **args):
+	'''
+	This function is to use scattering coefficient to calculate shell complex refractive index m_shell
+	input:
+		Dps           : particle diameter size, array, nm
+		PNSD          : particle number size distribution, array, dn/dlogDp
+		DBC           : BC particle diameter size, array, nm
+		BCPNSD        : BC particle number size distribution, array, dn/dlogDBC
+		m_BC          : BC core complex refractive index
+		wv            : wave length, nm
+		k             : scattering coefficient
+		**m_min       : minimum of m_shell, default 1
+		**m_max       : maximum of m_shell, default 2
+		**m_bin_rough : rough bin of m_shell, default 0.1
+		**m_bin_fine  : fine bin of m_shell, default 0.01
+	output:
+		m_shell       : shell complex refractive index
+	'''
+	if 'm_min' in args:
+		m_min = args['m_min']
+	else:
+		m_min = 1
+	if 'm_max' in args:
+		m_max = args['m_max']
+	else:
+		m_max = 2
+	if 'm_bin_rough' in args:
+		m_bin_rough = args['m_bin_rough']
+	else:
+		m_bin_rough = 0.1
+	if 'm_bin_fine' in args:
+		m_bin_fine = args['m_bin_fine']
+	else:
+		m_bin_fine = 0.01
+	
+	m_shell = np.arange(m_min, m_max+m_bin_rough, m_bin_rough)
+	kk = np.zeros(len(m_shell)) # rough calculate
+	ii = 0 # to mark the closest value subscript
+	dif = 999999
+	
+	print('rough calculating...')
+	for i in range(len(m_shell)):
+		kk[i] = cal_ksca_internal(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell[i], wv)
+		if abs(kk[i]-k)<dif:
+			dif = abs(kk[i]-k)
+			ii = i
+	
+	m_min_new = m_min + m_bin_rough * (ii-1)
+	m_max_new = m_min + m_bin_rough * (ii+1) # select two bin to do fine calculate
+	m_shell = np.arange(m_min_new, m_max_new+m_bin_fine, m_bin_fine)
+	kk = np.zeros(len(m_shell))
+	ii = 0
+	dif = 999999
+	
+	print('done\nfine calculating...')
+	for i in range(len(m_shell)):
+		kk[i] = cal_ksca_internal(Dps, PNSD, DBC, BCPNSD, m_BC, m_shell[i], wv)
+		if abs(kk[i]-k)<dif:
+			dif = abs(kk[i]-k)
+			ii = i
+	
+	print('done')
+	return m_shell[ii]
+
+def cal_Eabs(m_BC, m_shell, d_BC, d_shell, wv):
+	'''
+	This function is to use BC core and shell complex refractive index and diameter data to calculate absorption enhancement
+	input:
+		m_BC     : BC core complex refractive index
+		m_shell  : shell complex refractive index
+		d_BC     : BC core diameter, nm
+		d_shell  : shell diameter, equals to partical diameter, nm
+		wv       : wave length, nm
+	output:
+		Eabs     : BC absorption enhancement
+	'''
+	Qabs_BC = ps.MieQ(m_BC, wv, d_BC)[2]
+	Qabs_total = ps.MieQCoreShell(m_BC, m_shell, wv, d_BC, d_shell)[2]
+	Eabs = Qabs_total * d_shell**2 / Qabs_BC / d_BC**2
+	return Eabs
+
+if __name__ == '__main__':
+	print('Hello!')
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

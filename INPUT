@@ -1,0 +1,20 @@
+&INPUT
+	wlinf = 0.47
+	wlsup = 2.1
+	wlinc = 0.01
+	ngrid = 50
+	zgrid1 = 0.1
+	zgrid2 = 1
+	nstr = 4
+	iday = 180
+	time = 4
+	alat = 26
+	alon = 126
+	csza = -1
+	sza = 0
+	saza = 0
+	idatm = 0
+	iaer = -1
+	isalb = -1
+	iout = 11
+/

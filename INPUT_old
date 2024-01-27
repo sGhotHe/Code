@@ -1,0 +1,200 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! INTRODUCTION:
+! This is sbdart input file
+! Created by Hebs at 21/5/18/14:18
+! Contact: hebishuo@pku.edu.cn
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+&INPUT
+	wlinf = 0.47
+	wlsup = 2.1
+	wlinc = 0.01
+	
+	tcloud = 0 ! optical thickness of cloud layer
+	zcloud = 10 ! altitude of cloud layers, km
+	
+	ngrid = 50 ! sets the number of grid points, default 0
+	zgrid1 = 0.1 ! controls the resolution near the bottom of the grid, default 1
+	zgrid2 = 1 ! sets the maximum permissible step size (at the top of the grid), default 30
+	
+	nstr = 4 ! number of computational zenith angles used, default 4
+	
+	iday = 0 ! the number of days into a standard "year"
+	time = 0 ! UTC time (Grenwich) in decimal hours
+	alat = 40 ! latitude of point on earth's surface
+	alon = 116 ! east longitude of point on earth's surface
+	! TIME, ALAT and ALON are ignored if IDAY .eq. 0
+	
+	csza = -1 ! cosine of solar zenith angle, default -1
+	sza = 60 ! solar zenith angle, default 0
+	! SZA is ignored if CSZA is non-negative or IDAY is non-zero
+	saza = 0 ! solar azimuth angle, default 0
+	! SAZA is ignored if IDAY is non-zero
+	
+	!tbaer = 13.1 ! vertical optical depth of boundary layer aerosols nominally at 0.55um
+	!vis = 23 ! horizontal path visibility at 0.55um due to boundary layer aerosols
+	!wlbaer = 0.44, 0.675, 0.87, 1.02 ! wavelengths points for user defined aerosol spectral dependecnce, um
+	!qbaer = 0.81299, 0.464088, 0.31483, 0.246243 ! extinction efficiency (with tbaer) or extinction optical depths (without tbaer)
+	!wbaer = 0.917727, 0.920098, 0.909476, 0.898903 ! single scattering albedo used with IAER=5
+	!gbaer = 0.70012, 0.658759, 0.633962, 0.628472 ! asymmetry factor used with IAER=5
+	!pmaer = 0.66725407, 0.44230183, 0.26251447, 0.16390265, 0.10013242, 0.06795207, 
+	!0.75835851, 0.55377007, 0.39524946, 0.2974831, 0.23255383, 0.18922588,
+	!0.75754872, 0.51445515, 0.31857332, 0.18197149, 0.08196249, 0.00536753,
+	!0.71319687, 0.3977388, 0.1448824, -0.02545833, -0.13208864, -0.18859718 ! Legendre moments of the scattering phase function of boundary layer aerosols
+	
+	idatm = 0 ! 0 for user specified, 4 for sub-arctic summer, default 4
+	iaer = -1 ! boundary layer aerosol type selector
+	isalb = -1 ! surface albedo feature
+	!albcon = 20 ! a spectrally uniform, surface albedo
+	
+	iout = 11 ! standard output selector
+/
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! iaer document
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 
+! -1: read aerosol optical depth and scattering parameters from aerosol.dat
+! 0: no boundary later aerorols (all BLA parameters ignored)
+! 1: rural
+! 2: urban
+! 3: oceanic
+! 4: tropospheric
+! 5: user defined spectral dependence of BLA, read from wlbaer, tbaer, wbaer and gbaer
+! 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! isalb document
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 
+! -1: spectral surface albedo read from "albedo.dat"
+! 0: user specified, spectrally uniform albedo set with ALBCON
+! 1: snow, 2 for clear water
+! 3: lake water, 4 for sea water
+! 5: sand (data range 0.4-2.3um)
+! 6: vegetation (data range 0.4-2.6um)
+! 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! iout document
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 
+! iout=1:
+! one output record for each wavelength
+! wl: wavelength, um
+! ffv: filter function value
+! topdn: total downward flux at ZOUT(2) km, w/m2
+! topup: total upward flux at ZOUT(2) km, w/m2
+! topdir: direct downward flux at ZOUT(2) km, w/m2
+! botdn: total downward flux at ZOUT(1) km, w/m2
+! botup: total upward flux at ZOUT(1) km, w/m2
+! botdir: direct downward flux at ZOUT(1) km, w/m2
+! 
+! iout=5:
+! nzen+3 records for each wavelength
+! wl: wavelength, um
+! ffv: filter function value
+! topdn: total downward flux at ZOUT(2) km, w/m2
+! topup: total upward flux at ZOUT(2) km, w/m2
+! topdir: direct downward flux at ZOUT(2) km, w/m2
+! botdn: total downward flux at ZOUT(1) km, w/m2
+! botup: total upward flux at ZOUT(1) km, w/m2
+! botdir: direct downward flux at ZOUT(1) km, w/m2
+! nphi: number of user azimuth angles
+! nzen: number of user zenith angles
+! phi: user specified azimuth angles, degree
+! uzen: user specified zenith angles, degree
+! vzen: user specified nadir angles, degrees
+! uurs: radiance at user angles at altitude ZOUT(2) , w/m2/um/str 
+! 
+! iout=6:
+! same as iout=5 except radiance is for ZOUT(1) altitude
+! 
+! iout=7:
+! radiative flux at each layer for each wavelength
+! fzw: block id
+! nz: number of z levels
+! nw: number of wavelengths
+! z: altitude, km
+! fdird: downward direct flux, w/m2/um
+! fdifd: downward diffuse flux, w/m2/um
+! flxdn: total downward flux, w/m2/um
+! flxup: total upward flux, w/m2/um
+! 
+! iout=10:
+! out output record per run, integrated over wavelength
+! wlinf, wlsup, ffew, topdn, topup, topdir, botdn, botup, botdir
+! ffew: filter function equivalent width, um
+! topdn: total downward flux at ZOUT(2) km, w/m2
+! topup: total upward flux at ZOUT(2) km, w/m2
+! topdir: direct downward flux at ZOUT(2) km, w/m2
+! botdn: total downward flux at ZOUT(1) km, w/m2
+! botup: total upward flux at ZOUT(1) km, w/m2
+! botdir: direct downward flux at ZOUT(1) km, w/m2
+! 
+! iout=11:
+! radiant fluxes at each atmospheric layer integrated over wavelength
+! nz: number of atmospheric layers
+! phidw: filter function equivalent width, um
+! zz: level altitudes, km
+! pp: level pressure, mb
+! fxdn: downward flux (direct+diffuse), W/m2
+! fxup: upward flux, W/m2
+! fxdir: downward flux, direct beam only, W/m2
+! dfdz: radiant energy flux divergence, mW/m3
+! heat: heating rate, K/day
+! 
+! iout=20:
+! radiance output at ZOUT(2) km
+! wlinf, wlsup, ffew, topdn, topup, topdir, botdn, botup, botdir
+! ffew: filter function equivalent width, um
+! topdn: total downward flux at ZOUT(2) km, w/m2
+! topup: total upward flux at ZOUT(2) km, w/m2
+! topdir: direct downward flux at ZOUT(2) km, w/m2
+! botdn: total downward flux at ZOUT(1) km, w/m2
+! botup: total upward flux at ZOUT(1) km, w/m2
+! botdir: direct downward flux at ZOUT(1) km, w/m2
+! nphi: number of user azimuth angles
+! nzen: number of user zenith angles
+! phi: user relative azimuth angles (nphi values)
+! uzen: user zenith angles (nzen values)
+! r: radiance array (nphi,nzen), W/m2/sr
+! 
+! iout=21:
+! same as iout=20 except radiance output at ZOUT(1) km
+! 
+! iout=22:
+! radiance and flux at each atmospheric layer integrated over wavelength
+! nphi: number of user specified azimuth angles
+! nzen: number of user specified zenith angles
+! nz: number of atmospheric levels
+! ffew: filter function equivalent width, um
+! phi: user specified anizmuth angles, degrees
+! uzen: user specified zenith angles, degrees
+! z: altitudes of atmospheric layers, km
+! fxdn: downward flux (direct+diffuse), W/m2
+! fxup: upward flux, W/m2
+! fxdir: downward flux, direct beam only, W/m2
+! uurl: radiance at each layer, W/m2/str
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
