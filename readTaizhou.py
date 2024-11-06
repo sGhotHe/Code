@@ -18,7 +18,7 @@ def read_Taizhou(fn):
 			PNSD    : partical number concentration size distribution, array, cm^-3
 			DBC     : BC core diameter distribution, array, nm
 			DBCps   : BC core have partical diameter distribution, array, nm
-			DMASP2  : BC size-resolved particle number size distribution, array, dn/dlnDBC
+			DMASP2  : BC size-resolved particle number size distribution, array, cm^-3
 			BCPNSD  : BC partical number size distribution, array, dn/dlnDBC
 			BCPVSD  : BC partical volume size distribution, array, d(um^3/cm^3)/dlnDBC
 			ksca    : scattering coefficient, Mm^-1

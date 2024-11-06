@@ -355,7 +355,7 @@ if __name__ == '__main__':
 	#paras.append('BCI')
 	paras.append('BCAE')
 	
-	plot('230604', 2, 0.3, 0.05, paras=paras, debug=True, save=True)
+	plot('230604', 2, 0.3, 0.05, paras=paras, debug=True, save=False)
 	
 	
 	

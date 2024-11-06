@@ -7,21 +7,19 @@
 
 default_paras = [] # default parameters list
 default_paras.append('n')
-default_paras.append('nI')
-default_paras.append('nI2')
+default_paras.append('nH1')
 default_paras.append('nBC')
 default_paras.append('kBC')
 default_paras.append('PNSD')
 default_paras.append('MS')
-default_paras.append('VD')
+default_paras.append('MSH1')
+default_paras.append('MSH2')
 default_paras.append('CT')
+default_paras.append('CTH1')
 default_paras.append('kappa')
-default_paras.append('kappaI')
-default_paras.append('kappaI2')
+default_paras.append('kappaH1')
 default_paras.append('rhoBC')
 default_paras.append('BCPNSD')
-default_paras.append('BCPMSD')
-default_paras.append('BCI')
 default_paras.append('BCAE')
 
 import numpy as np
@@ -298,7 +296,7 @@ if __name__ == '__main__':
 	#paras.append('BCI')
 	#paras.append('BCAE')
 	
-	plot('230604', 2, 0.3, 0.05, paras=paras, debug=True, save=True)
+	plot('230604', 2, 0.3, 0.05, paras=paras, debug=True, save=False)
 	
 	
 	

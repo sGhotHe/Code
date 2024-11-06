@@ -8,7 +8,7 @@
 import numpy as np
 from scipy.stats import pearsonr, rankdata
 from numpy.linalg import lstsq
-
+'''
 default_paras = [] # default parameters list
 default_paras.append('n')
 default_paras.append('nI')
@@ -27,6 +27,25 @@ default_paras.append('BCPNSD')
 default_paras.append('BCPMSD')
 default_paras.append('BCI')
 default_paras.append('BCAE')
+'''
+default_paras = [] # default parameters list
+default_paras.append('n')
+default_paras.append('nI')
+default_paras.append('nI2')
+default_paras.append('nBC')
+default_paras.append('kBC')
+default_paras.append('PNSD')
+default_paras.append('MS')
+default_paras.append('VD')
+default_paras.append('CT')
+default_paras.append('kappa')
+default_paras.append('kappaI')
+default_paras.append('kappaI2')
+default_paras.append('rhoBC')
+default_paras.append('BCPNSD')
+default_paras.append('BCAE')
+default_paras.append('amb')
+default_paras.append('albedo')
 
 def pearson_corr(paras, y):
 	'''
@@ -159,6 +178,7 @@ def cal(dtime, **args):
 		**save_path : save path, string, default 'output/CC/'
 		**debug     : output flag, bool, default False
 		**paras     : parameters list, array, string, default default_paras
+		**outputs	: output list, array, string, default ['AOD', 'SSA', 'g']
 	output:
 		in dictionary
 		CC          : Pearson correlation coefficient, float, array
@@ -187,9 +207,12 @@ def cal(dtime, **args):
 		paras = args['paras']
 	else:
 		paras = default_paras
+	if 'outputs' in args:
+		outputs = args['outputs']
+	else:
+		outputs = ['AOD', 'SSA', 'g']
 	
 	par_num = len(paras)
-	outputs = ['AOD', 'SSA', 'g']
 	out_num = len(outputs)
 	path = path + dtime + '/all/'
 	data = np.load(path+'infos.npy', allow_pickle=True)
@@ -226,15 +249,19 @@ def cal(dtime, **args):
 	return Corr
 
 if __name__ == '__main__':
-	Corr = cal('230604', debug=False, paras=['n','VD'])
-	print(Corr['CC'][0])
-	print(Corr['CC_P'][0])
-	print(Corr['PCC'][0])
-	print(Corr['PCC_P'][0])
-	print(Corr['RCC'][0])
-	print(Corr['RCC_P'][0])
-	print(Corr['PRCC'][0])
-	print(Corr['PRCC_P'][0])
+	#Corr = cal('230604', debug=False, path='output/Mie/', paras=['n','kappa'], outputs=['AOD','SSA','g'])
+	#Corr = cal('240310', debug=False, path='output/DARF/', paras=['n','nI','PNSD','MS','CT','albedo'], outputs=['RF_top','RF_bot'])
+	Corr = cal('240310', debug=False, path='output/DARF/', outputs=['RF_top','RF_bot'])
+	i = 0
+	print(Corr['CC'][i])
+	print(Corr['CC_P'][i])
+	print(Corr['PCC'][i])
+	print(Corr['PCC_P'][i])
+	print(Corr['RCC'][i])
+	print(Corr['RCC_P'][i])
+	print(Corr['PRCC'][i])
+	print(Corr['PRCC_P'][i])
+	print(default_paras)
 	
 	'''
 	idx = np.ones(len(default_paras)) * (len(default_paras)+1)

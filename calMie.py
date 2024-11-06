@@ -81,13 +81,72 @@ def cal_lim(array, **args):
 	lim = [mn-dn, mx+up]
 	return lim
 
+def Mie2(Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell, nShellH1, kappa, kappaH1, MS, MSH1, MSH2x, MSH2y,dz, RH, wl, CT, CTH1, BCAE, **args):
+	'''
+	This function is to use Mie modal to calculate aerosol parameters AOD, SSA and g
+	input:
+		Dps      : diameter distribution, array, nm
+		PNSD     : number distribution, array, dn/dlogDps, cm^-3
+		DBCps    : BC particle diameter size, array, nm
+		DBC      : BC core diameter size, array, nm
+		BCPNSD   : BC particle number concentration, array, dn/dlogDBCps/dlogDBC, cm^-3
+		kBC      : BC core imagine part of complex refractive index, float
+		nBC      : BC core real part of complex refractive index, float
+		n        : shell complex refractive index, float
+		nH1      : n mixing state change rate by diameter, float
+		kappa    : hygroscopicity parameter, float
+		kappaH1  : hygroscopicity parameter mixing state change rate by diameter, float
+		MS       : mixing state, float
+		MSH1     : mixing state change rate by diameter, float
+		MSH2x    : mixing state bin peak number, int
+		MSH2y    : mixing state bin peak saperate rate, float
+		dz       : thickness, meter, float
+		RH       : relative humidity, float, percent
+		wl       : wave length, nm, float
+		CT       : BC core coating thickness adjust parameter, float
+		CTH1     : BC core coating thickness change rate by diameter, float
+		BCAE     : BC core absorbing enhancement adjust parameter, float
+		**args:
+			debug				: debug flag, bool, default False
+	output:
+		aerosol optical parameters
+		AOD		: aerosol optical depth, np.array, in shape (len(wl))
+		SSA		: single scattering albedo, np.array, in shape (len(wl))
+		g       : asymmetry factor, np.array, in shape (len(wl))
+	'''
+	if 'debug' in args:
+		debug = args['debug']
+	else:
+		debug = False
+	
+	if debug:
+		print('calculating...')
+	
+	AOD = np.zeros(len(wl))
+	SSA = np.zeros(len(wl))
+	g = np.zeros(len(wl))
+	
+	for i in range(len(wl)):
+		kext_i, ksca_i, g[i] = calNI.cal_Mie3(Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell, nShellH1, kappa, kappaH1, MS, MSH1, MSH2x, MSH2y, RH, wl[i], CT, CTH1, BCAE)
+		AOD[i] = kext_i * dz * 1e-6
+		SSA[i] = ksca_i / kext_i
+		if debug:
+			print('AOD:', AOD)
+			print('SSA:', SSA)
+			print('g:', g)
+	
+	if debug:
+		print('done')
+	
+	return AOD, SSA, g
+
 def Mie(Dps, PNSD, DBCps, DBC, BCPNSD, nBC, kBC, nShell, nI1, nI2x, nI2y, kappa, kappaI1, kappaI2x, kappaI2y, RH, wl, z, dz, BCAE, CT, VD, PF, **args):
 	'''
 	This function is to use Mie modal to calculate Mie parameters,
 	parameters including: 
-		dtau for AOD
-		waer for SSA
-		pmom for legendre moments of phase function
+		AOD
+		SSA
+		g
 	input:
 		Dps          : diameter distribution, array, nm
 		PNSD         : number distribution, array, dn/dlogDp

@@ -45,6 +45,66 @@ def write(fn, lat, lon, mon, **args):
 		for i in range(len(z)):
 			f.write(str(z[i])+'\t'+str(p[i])+'\t'+str(t[i])+'\t'+str(wh[i])+'\t'+str(wo[i])+'\n')
 
+def amb_write(fn, lat, lon, amb, **args):
+	'''
+	This function is to use EAR5 data to make atms.dat file for SBDART,
+	but use parameter 'amb' to write file
+	the ambiant parameters would be:
+	par_amb = par_summer * amb + par_winter * (1-amb)
+	input:
+		fn           : EAR5 data file name, string
+		lat          : latitude, int
+		lon          : longitude, int
+		amb          : ambiant parameters rate, float, turblence by 0.5
+		**output     : output path, string, default ./atms.dat
+		**summer_mon : summer month, int, default 7
+		**winter_mon : winter month, int, default 12
+	output:
+		atms.dat for SBDART
+                           z  is the layer altitude in km 
+                              (z must be monotonically decreasing)
+                           p  is the pressure in millibars
+                           t  is the temperature is Kelvin
+                           wh is water vapor density g/m3
+                           wo is ozone density g/m3
+	'''
+	if 'summer_mon' in args:
+		summer_mon = args['summer_mon']
+	else:
+		summer_mon = 6 # revised in 24/6/5
+	if 'winter_mon' in args:
+		winter_mon = args['winter_mon']
+	else:
+		winter_mon = 12
+	if 'output' in args:
+		output = args['output']
+	else:
+		output = 'atms.dat'
+	
+	era5 = readERA5.readERA5(fn, lat, lon)
+	
+	p = era5['p']
+	
+	summer_z = era5['z'][summer_mon-1]
+	summer_t = era5['t'][summer_mon-1]
+	summer_wh = era5['wh'][summer_mon-1]
+	summer_wo = era5['wo'][summer_mon-1]
+	
+	winter_z = era5['z'][winter_mon-1]
+	winter_t = era5['t'][winter_mon-1]
+	winter_wh = era5['wh'][winter_mon-1]
+	winter_wo = era5['wo'][winter_mon-1]
+	
+	z = summer_z * amb + winter_z * (1-amb)
+	t = summer_t * amb + winter_t * (1-amb)
+	wh = summer_wh * amb + winter_wh * (1-amb)
+	wo = summer_wo * amb + winter_wo * (1-amb)
+	
+	with open(output, 'w') as f:
+		f.write(str(len(z))+'\n')
+		for i in range(len(z)):
+			f.write(str(z[i])+'\t'+str(p[i])+'\t'+str(t[i])+'\t'+str(wh[i])+'\t'+str(wo[i])+'\n')
+	
 def double_layer(**args):
 	'''
 	This function is to use interpolate to double atms.dat layer, p/t/wh/wo for linear, z for log
@@ -109,7 +169,13 @@ def double_layer(**args):
 		wh_new.append(wh[-1])
 		wo_new.append(wo[-1])
 	else:
-		for i in range(65-len(z)):
+		for i in range(2*len(z)-65):
+			z_new.append(z[i])
+			p_new.append(p[i])
+			t_new.append(t[i])
+			wh_new.append(wh[i])
+			wo_new.append(wo[i])
+		for i in range(2*len(z)-65,len(z)-1):
 			z_new.append(z[i])
 			z_new.append(np.exp(np.log(z[i+1]*z[i])/2))
 			p_new.append(p[i])
@@ -120,12 +186,11 @@ def double_layer(**args):
 			wh_new.append((wh[i]+wh[i+1])/2)
 			wo_new.append(wo[i])
 			wo_new.append((wo[i]+wo[i+1])/2)
-		for i in range(65-len(z),len(z)):
-			z_new.append(z[i])
-			p_new.append(p[i])
-			t_new.append(t[i])
-			wh_new.append(wh[i])
-			wo_new.append(wo[i])
+		z_new.append(z[-1])
+		p_new.append(p[-1])
+		t_new.append(t[-1])
+		wh_new.append(wh[-1])
+		wo_new.append(wo[-1])
 	
 	print(len(z_new))
 	os.system('mv '+path+' '+path+'_origin') # backup the origin file
@@ -176,8 +241,10 @@ def write_location():
 		os.system('mv input/atms/Heilongjiang/atms.dat input/atms/Heilongjiang/atms.dat_'+str(month[i]))
 
 if __name__ == '__main__':
-	#write('data/era5/data.nc', 26, 126, 6)
-	double_layer()
+	#amb_write('data/era5/data.nc', 26, 126, 0.5)
+	write('data/era5/data.nc', 26, 126, 6)
+	#write('data/era5/data.nc', 40, 116, 6)
+	#double_layer()
 	#change_back()
 	
 	

@@ -12,7 +12,6 @@ import random
 from pyDOE import lhs
 from scipy.stats import norm
 
-import write_atms
 import readAtms
 import readTaizhou
 import calRH
@@ -22,30 +21,26 @@ import calPNSD
 
 ###############################################
 # some constants
-default_mag = 0.3 # Dps resolution adjust magnification
+default_mag = 0.2 # Dps resolution adjust magnification
 default_range = 0.3 # 30% turbulence
 default_paras = [] # default parameters list
 default_paras.append('n')
-default_paras.append('nH1')
+default_paras.append('nI')
+default_paras.append('nI2')
 default_paras.append('nBC')
 default_paras.append('kBC')
 default_paras.append('PNSD')
 default_paras.append('MS')
-default_paras.append('MSH1')
-default_paras.append('MSH2')
+default_paras.append('VD')
 default_paras.append('CT')
-default_paras.append('CTH1')
 default_paras.append('kappa')
-default_paras.append('kappaH1')
+default_paras.append('kappaI')
+default_paras.append('kappaI2')
 default_paras.append('rhoBC')
 default_paras.append('BCPNSD')
+default_paras.append('BCPMSD')
+default_paras.append('BCI')
 default_paras.append('BCAE')
-
-main_paras = [] # main factors
-main_paras.append('n')
-main_paras.append('MS')
-main_paras.append('CT')
-main_paras.append('kappa')
 ###############################################
 
 def LHS_norm(num, loc, scale):
@@ -82,33 +77,36 @@ def EFAST_norm(num, loc, scale, freq):
 		x[i] = norm(loc=loc, scale=scale).ppf(x[i])
 	return x
 
-def run(dz, wl, RH, **args):
+def run(Z, dZ, wl, **args):
 	'''
 	This function is the main function of this code, using Monte Carlo method to test all factors' sensitivity of Mie parameters
 	Factors including:
 		n for real part of complex refractive index
-		nH1 for real part of complex refractive index mixing 1 level heterogeneity
+		nI for real part of complex refractive index mixing inhomogeneity, linear change
+		nI2 for real part of complex refractive index mixing inhomogeneity, peaks separate rate
 		nBC for BC real part of complex refractive index
 		kBC for BC imagine part of complex refractive index
 		PNSD for number distribution dirty part proportion
 		MS for mixing state external part proportion
-		MSH1 for mixing state external part proportion 1 level heterogeneity
-		MSH2 for mixing state external part proportion 2 level heterogeneity
 		VD for vertical distribution type B part proportion
 		CT for coating thickness
-		CTH1 for coating thickness 1 level heterogeneity
 		kappa for hydroscopicity parameter
-		kappaH1 for kappa mixing 1 level heterogeneity
+		kappaI for kappa mixing inhomogeneity, like nI
 		rhoBC for BC density
 		BCPNSD for BC number distribution dirty part proportion, in cm-3
+		BCPMSD for BC mass distribution, in 1e-15 g/cm3
+		BCI for BC mixing inhomogeneity
 		BCAE for BC absorbing enhancement
 	input:
+		z     : height, in m
 		dz    : thickness, in m
 		wl    : the wavelength [ wl(k) < wl(k+1) ], array, nm
-		RH    : relative humidity, percent, float
 		**args including:
 			debug, bool
 			data_path, string
+			input_path, string
+			output_path, string
+			output_name, string
 			Dps, np.array
 			clean_PNSD, np.array
 			dirty_PNSD, np.array
@@ -117,16 +115,12 @@ def run(dz, wl, RH, **args):
 			DBC, np.array
 			DBCps, np.array
 	output:
-		infos:
-			aerosol optical parameter information, dict
-			including:
-				AOD   : aerosol optical depth
-				SSA   : single scattering albedo
-				g     : asymmetry factor
-			in form of: Mie_infos=[dtau[:,0],waer[:,0],pmom[:,0,:]],
-			and parameter turburlence information, including all parameters' change rate
-		paras:
-			origin parameter value, dict
+		aerosol optical parameter information, including:
+			AOD   : aerosol optical depth
+			SSA   : single scattering albedo
+			g     : asymmetry factor
+		in form of: Mie_infos=[dtau[:,0],waer[:,0],pmom[:,0,:]],
+		and parameter turburlence information, including all parameters' change rate
 	'''
 	if 'n_rate' in args:
 		n_rate_on = True
@@ -141,19 +135,51 @@ def run(dz, wl, RH, **args):
 			n_range = default_range
 	else:
 		n_on = False
-	if 'nH1_rate' in args:
-		nH1_rate_on = True
-		nH1_rate = args['nH1_rate']
+	'''
+	if 'k_rate' in args:
+		k_rate_on = True
+		k_rate = args['k_rate']
 	else:
-		nH1_rate_on = False
-	if 'nH1_on' in args:
-		nH1_on = args['nH1_on']
-		if 'nH1_range' in args:
-			nH1_range = args['nH1_range']
+		k_rate_on = False
+	if 'k_on' in args:
+		k_on = args['k_on']
+		if 'k_range' in args:
+			k_range = args['k_range']
 		else:
-			nH1_range = default_range
+			k_range = default_range
 	else:
-		nH1_on = False
+		k_on = False
+	'''
+	if 'nI_rate' in args:
+		nI_rate_on = True
+		nI_rate = args['nI_rate']
+	else:
+		nI_rate_on = False
+	if 'nI_on' in args:
+		nI_on = args['nI_on']
+		if 'nI_range' in args:
+			nI_range = args['nI_range']
+		else:
+			nI_range = default_range
+	else:
+		nI_on = False
+	if 'nI2x' in args:
+		nI2x = args['nI2x']
+	else:
+		nI2x = 1
+	if 'nI2_rate' in args:
+		nI2_rate_on = True
+		nI2_rate = args['nI2_rate']
+	else:
+		nI2_rate_on = False
+	if 'nI2_on' in args:
+		nI2_on = args['nI2_on']
+		if 'nI2_range' in args:
+			nI2_range = args['nI2_range']
+		else:
+			nI2_range = default_range
+	else:
+		nI2_on = False
 	
 	if 'nBC_rate' in args:
 		nBC_rate_on = True
@@ -207,40 +233,19 @@ def run(dz, wl, RH, **args):
 			MS_range = default_range
 	else:
 		MS_on = False
-	
-	if 'MSH1_rate' in args:
-		MSH1_rate_on = True
-		MSH1_rate = args['MSH1_rate']
+	if 'VD_rate' in args:
+		VD_rate_on = True
+		VD_rate = args['VD_rate']
 	else:
-		MSH1_rate_on = False
-	if 'MSH1_on' in args:
-		MSH1_on = args['MSH1_on']
-		if 'MSH1_range' in args:
-			MSH1_range = args['MSH1_range']
+		VD_rate_on = False
+	if 'VD_on' in args:
+		VD_on = args['VD_on']
+		if 'VD_range' in args:
+			VD_range = args['VD_range']
 		else:
-			MSH1_range = default_range
+			VD_range = default_range
 	else:
-		MSH1_on = False
-	
-	if 'MSH2x' in args:
-		MSH2x = args['MSH2x']
-	else:
-		MSH2x = 1
-	
-	if 'MSH2_rate' in args:
-		MSH2_rate_on = True
-		MSH2_rate = args['MSH2_rate']
-	else:
-		MSH2_rate_on = False
-	if 'MSH2_on' in args:
-		MSH2_on = args['MSH2_on']
-		if 'MSH2_range' in args:
-			MSH2_range = args['MSH2_range']
-		else:
-			MSH2_range = default_range
-	else:
-		MSH2_on = False
-	
+		VD_on = False
 	if 'CT_rate' in args:
 		CT_rate_on = True
 		CT_rate = args['CT_rate']
@@ -254,21 +259,6 @@ def run(dz, wl, RH, **args):
 			CT_range = default_range
 	else:
 		CT_on = False
-	
-	if 'CTH1_rate' in args:
-		CTH1_rate_on = True
-		CTH1_rate = args['CTH1_rate']
-	else:
-		CTH1_rate_on = False
-	if 'CTH1_on' in args:
-		CTH1_on = args['CTH1_on']
-		if 'CTH1_range' in args:
-			CTH1_range = args['CTH1_range']
-		else:
-			CTH1_range = default_range
-	else:
-		CTH1_on = False
-	
 	if 'kappa_rate' in args:
 		kappa_rate_on = True
 		kappa_rate = args['kappa_rate']
@@ -282,20 +272,37 @@ def run(dz, wl, RH, **args):
 			kappa_range = default_range
 	else:
 		kappa_on = False
-	
-	if 'kappaH1_rate' in args:
-		kappaH1_rate_on = True
-		kappaH1_rate = args['kappaH1_rate']
+	if 'kappaI_rate' in args:
+		kappaI_rate_on = True
+		kappaI_rate = args['kappaI_rate']
 	else:
-		kappaH1_rate_on = False
-	if 'kappaH1_on' in args:
-		kappaH1_on = args['kappaH1_on']
-		if 'kappaH1_range' in args:
-			kappaH1_range = args['kappaH1_range']
+		kappaI_rate_on = False
+	if 'kappaI_on' in args:
+		kappaI_on = args['kappaI_on']
+		if 'kappaI_range' in args:
+			kappaI_range = args['kappaI_range']
 		else:
-			kappaH1_range = default_range
+			kappaI_range = default_range
 	else:
-		kappaH1_on = False
+		kappaI_on = False
+	
+	if 'kappaI2x' in args:
+		kappaI2x = args['kappaI2x']
+	else:
+		kappaI2x = 1
+	if 'kappaI2_rate' in args:
+		kappaI2_rate_on = True
+		kappaI2_rate = args['kappaI2_rate']
+	else:
+		kappaI2_rate_on = False
+	if 'kappaI2_on' in args:
+		kappaI2_on = args['kappaI2_on']
+		if 'kappaI2_range' in args:
+			kappaI2_range = args['kappaI2_range']
+		else:
+			kappaI2_range = default_range
+	else:
+		kappaI2_on = False
 	
 	if 'rhoBC_rate' in args:
 		rhoBC_rate_on = True
@@ -310,7 +317,6 @@ def run(dz, wl, RH, **args):
 			rhoBC_range = default_range
 	else:
 		rhoBC_on = False
-	
 	if 'BCPNSD_rate' in args:
 		BCPNSD_rate_on = True
 		BCPNSD_rate = args['BCPNSD_rate']
@@ -324,7 +330,32 @@ def run(dz, wl, RH, **args):
 			BCPNSD_range = default_range
 	else:
 		BCPNSD_on = False
-	
+	if 'BCPMSD_rate' in args:
+		BCPMSD_rate_on = True
+		BCPMSD_rate = args['BCPMSD_rate']
+	else:
+		BCPMSD_rate_on = False
+	if 'BCPMSD_on' in args:
+		BCPMSD_on = args['BCPMSD_on']
+		if 'BCPMSD_range' in args:
+			BCPMSD_range = args['BCPMSD_range']
+		else:
+			BCPMSD_range = default_range
+	else:
+		BCPMSD_on = False
+	if 'BCI_rate' in args:
+		BCI_rate_on = True
+		BCI_rate = args['BCI_rate']
+	else:
+		BCI_rate_on = False
+	if 'BCI_on' in args:
+		BCI_on = args['BCI_on']
+		if 'BCI_range' in args:
+			BCI_range = args['BCI_range']
+		else:
+			BCI_range = default_range
+	else:
+		BCI_on = False
 	if 'BCAE_rate' in args:
 		BCAE_rate_on = True
 		BCAE_rate = args['BCAE_rate']
@@ -347,7 +378,18 @@ def run(dz, wl, RH, **args):
 		data_path = args['data_path']
 	else:
 		data_path = 'data/'
-	
+	if 'input_path' in args:
+		input_path = args['input_path']
+	else:
+		input_path = 'input/all'
+	if 'output_path' in args:
+		output_path = args['output_path']
+	else:
+		output_path = 'output/all/'
+	if 'output_name' in args:
+		output_name = args['output_name']
+	else:
+		output_name = 'output'
 	if 'Dps' in args:
 		Dps_exist = True
 		Dps = args['Dps']
@@ -416,6 +458,25 @@ def run(dz, wl, RH, **args):
 			PNSD = sp2['PNSD']
 			BCPNSD = sp2['DMASP2']
 			
+			N = np.nansum(PNSD, axis=1)
+			NBC = np.nansum(np.nansum(BCPNSD, axis=2), axis=1)
+			N_max = 0
+			NBC_max = 0
+			i_max = 0
+			iBC_max = 0
+			for i in range(len(N)):
+				if N[i] > N_max:
+					N_max = N[i]
+					i_max = i
+				if NBC[i] > NBC_max:
+					NBC_max = NBC[i]
+					iBC_max = i
+			'''
+			clean_PNSD = np.nanmean(PNSD, axis=0)
+			dirty_PNSD = PNSD[i_max]
+			clean_BCPNSD = np.nanmean(BCPNSD, axis=0)
+			dirty_BCPNSD = BCPNSD[iBC_max]
+			'''
 			#######################################################
 			# need more discuss
 			clean_PNSD = np.nanmean(PNSD, axis=0) / 10 # cm-3/dlnDps
@@ -438,6 +499,49 @@ def run(dz, wl, RH, **args):
 		#print('dirty BCPNSD:', dirty_BCPNSD)
 		print('done')
 	
+	# read BCPMSD data
+	
+	if not DBC2_exist and not clean_BCPMSD_exist and not dirty_BCPMSD_exist:
+		BCPMSD_exist = False
+		fn = data_path + 'BCMD/BCPMSD.npy'
+		if os.path.exists(fn):
+			if debug:
+				print('reading BCPMSD data...')
+			BCPMSD_exist = True
+			data = np.load(fn, allow_pickle=True).item()
+			DBC2 = data['DBC']
+			BCPMSD = data['BCPMSD']
+			
+			clean_BCPMSD = BCPMSD / 5 # cm-3
+			dirty_BCPMSD = BCPMSD
+	else:
+		BCPMSD_exist = True
+	
+	if debug:
+		print('BC information:')
+		#print('DBC:', DBC2)
+		#print('clean BCPMSD:', clean_BCPMSD)
+		#print('dirty BCPMSD:', dirty_BCPMSD)
+		print('done')
+	
+	# if neither BCPNSD nor BCPMSD data exist, using default data
+	
+	if not BCPNSD_exist and not BCPMSD_exist:
+		if debug:
+			print('No BCPNSD or BCPMSD data. Using default data.')
+		# read in default BCPNSD and BCPMSD data
+		#
+		#
+		#
+		#
+		#
+		#
+		#
+		#
+		#
+		if debug:
+			print('done')
+	
 	# after this, DBC, DBCps and BCPNSD data is certained
 	
 	# read mixing state. If not exist, using default data
@@ -445,10 +549,29 @@ def run(dz, wl, RH, **args):
 	MS = 0.7 # from Size distribution and mixing state of blank carbon particles during a heavy air pollution episode in Shanghai, X.Gong et al., 2016
 	if debug:
 		print('mixing state rate :', MS)
-	MSH1 = 0.5
-	MSH2 = 0.5
+	
+	# calculate BCI from BCPNSD data
+	# BCI = (DAlpha-1) / (DGamma-1)
+	# to change BCI, have to change BCPNSD data
+	# the complex method: read in different DMASP2 data, but change rate will be small
+	# the easier method: change BCPNSD, in conservation of total BC mass
+	# how to change: mix origin BCPNSD with maximum mixing state entropy mode
+	# thus, DAlpha won't change, but DGamma will change
+	# how to do: 
+	# 1. calculate total BC mass for BCPNSD[i]
+	# 2. distribute BC mass evenly for all particals
+	# 3. calculate mixing parameter, to satisry certain BCI change rate
 	
 	BCPNSD = clean_BCPNSD * 0.5 + dirty_BCPNSD * 0.5
+	BCI = calBC.cal_BCI(DBC, DBCps, BCPNSD)
+	if debug:
+		print('BCI :', BCI)
+	
+	# read vertical distribution type. If not exist, using default data
+	
+	VD = 28 / (28+39) # from Aircraft study of aerosol vertical distributions over Beijing and their optical properties, P.Liu et al., 2009
+	if debug:
+		print('vertical distribution rate :', VD)
 	
 	# read BC density. If not exist, using default data
 	
@@ -467,22 +590,55 @@ def run(dz, wl, RH, **args):
 	nShell = 1.58 # from Beijing University observation
 	if debug:
 		print('nShell :', nShell)
-	nH1 = 0.5
+	nI = 0
+	nI2 = 0.2 # set default peak separate rate as 20%
 	
 	# read kappa data. If not exist, using default data
-	
-	CTH1 = 0.5
 	
 	kappa = 0.21537370768611558 # from Beijing University observation
 	# according to Petters and Kreidenweis 2007, kappa can change from 0.002 to 0.67
 	# set kappaI change range from 0.5 * kappa to 1.5 * kappa, equal to 0.1
 	if debug:
 		print('kappa :', kappa)
-	kappaH1 = 0.5
+	kappaI = 0
+	kappaI2 = 0.2
 	
-	# save origin factor value
+	# read RH data, from top to bottom
 	
-	paras = dict(n=nShell, nH1=nH1, nBC=nBC, kBC=kBC, PNSD=0.5, MS=MS, MSH1=MSH1, MSH2=MSH2, CT=1, CTH1=CTH1, kappa=kappa, kappaH1=kappaH1, rhoBC=rhoBC, BCPNSD=0.5, BCAE=1)
+	atms = readAtms.read() # from EAR5 reanalysis data
+	z = atms['z'] * 1e3 # in m, from top to bottom
+	dz = z[:-1] - z[1:] # dz in each two layers, in m
+	wh = atms['wh']
+	t = atms['t']
+	if debug:
+		print('Max height :', z[0], 'm')
+	# turn water vapor density in g/m3 to RH, in %
+	RH = np.zeros(len(wh))
+	for i in range(len(RH)):
+		RH[i] = calRH.wh2RH(t[i], wh[i])
+		if RH[i]<1:
+			RH[i] = 1 # minimum RH set to 1
+	
+	# check the input data validity
+	# if wl(k) < wl(k+1) doesn\'t meet, exit
+	for i in range(len(wl)-1):
+		if (wl[i+1]-wl[i])<0:
+			print('wl(k) < wl(k+1) doesn\'t meet. Please check.')
+			sys.exit()
+	# if Z > max[z], exit
+	if Z > z[0]:
+		print('Too high height. Please check.')
+		sys.exit()
+	
+	# find the position of Z
+	i = 0
+	while i < len(z)-1:
+		if z[i]>=Z and z[i+1]<=Z:
+			break
+		i = i + 1
+	RH = RH[i]
+	if debug:
+		print('Raletive humidity :', RH, '%')
 	
 	# processing data change
 	###################################################################################
@@ -505,14 +661,10 @@ def run(dz, wl, RH, **args):
 		ratio = 0.5
 		PNSD = dirty_PNSD * ratio + clean_PNSD * (1-ratio)
 		PNSD_rate = 0
-	if debug:
-		print('PNSD : ', PNSD_rate)
 	
 	######################################################################
 	# adjust Dps resolution to simplify calculate pressure
-	#print(PNSD, Dps)
 	PNSD, Dps = calPNSD.PNSD_Dps_adjust(PNSD, Dps, default_mag)
-	#print(PNSD, Dps)
 	######################################################################
 	
 	if BCPNSD_rate_on:
@@ -528,8 +680,10 @@ def run(dz, wl, RH, **args):
 		ratio = 0.5
 		BCPNSD = dirty_BCPNSD * ratio + clean_BCPNSD * (1-ratio)
 		BCPNSD_rate = 0
-	if debug:
-		print('BCPNSD : ', BCPNSD_rate)
+	
+	# This BCPNSD for internal mixing
+	
+	BCPNSD_int = BCPNSD
 	
 	# MS, rhoBC and BCPMSD to make BCPNSD_ext
 	
@@ -545,29 +699,6 @@ def run(dz, wl, RH, **args):
 	else:
 		MS_rate = 0
 	
-	if MSH1_rate_on:
-		MSH1 = MSH1 * MSH1_rate
-	elif MSH1_on:
-		MSH1_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * MSH1_range
-		MSH1 = MSH1 * MSH1_rate
-	else:
-		MSH1_rate = 0
-		MSH1 = 0
-	if debug:
-		print('MS heterogeneity 1 : ', MSH1)
-	
-	if MSH2_rate_on:
-		MSH2y = MSH2 * MSH2_rate
-	elif MSH2_on:
-		MSH2_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * MSH2_range
-		MSH2y = MSH2 * MSH2_rate
-	else:
-		MSH2_rate = 0
-		MSH2x = 1
-		MSH2y = 0
-	if debug:
-		print('MS heterogeneity 2 : ', MSH2y)
-	
 	if rhoBC_rate_on:
 		rhoBC = rhoBC * rhoBC_rate
 	elif rhoBC_on:
@@ -575,6 +706,43 @@ def run(dz, wl, RH, **args):
 		rhoBC = rhoBC * rhoBC_rate
 	else:
 		rhoBC_rate = 0
+	
+	if BCPMSD_rate_on:
+		ratio = 0.5 * BCPMSD_rate
+		BCPMSD = dirty_BCPMSD * ratio + clean_BCPMSD * (1-ratio)
+	elif BCPMSD_on:
+		BCPMSD_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * BCPMSD_range
+		ratio = 0.5 * BCPMSD_rate
+		# setting BCPMSD's mixiture
+		BCPMSD = dirty_BCPMSD * ratio + clean_BCPMSD * (1-ratio)
+	else:
+		ratio = 0.5
+		BCPMSD = dirty_BCPMSD * ratio + clean_BCPMSD * (1-ratio)
+		BCPMSD_rate = 0
+	
+	# calculate BCPNSD_ext use BCPMSD
+	
+	BCPNSD_ext = np.zeros(len(DBC))
+	for i in range(len(DBC)):
+		BCPMSD_i = calPNSD.PNSD_Dp(DBC2, BCPMSD, DBC[i])
+		# BCPMSD in 1e-15 g/cm3
+		# rhoBC in g/cm3
+		# DBC in nm
+		m_i = np.pi / 6 * rhoBC * (DBC[i]*1e-7)**3 # in g
+		BCPNSD_ext[i] = BCPMSD_i / m_i * 1e-15 # in /cm3
+	
+	# use MS to calculate BCPNSD external and internal part
+	
+	BCPNSD = BCPNSD_int * MS + BCPNSD_ext * (1-MS)
+	# BCPNSD data for internal mixing BC, BCPMSD data for external mixing BC
+	
+	if BCI_rate_on:
+		BCI, BCPNSD, af = calBC.cal_BCI_change_af(DBC, DBCps, BCPNSD, BCI_rate)
+	elif BCI_on:
+		BCI_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * BCI_range
+		BCI, BCPNSD, af = calBC.cal_BCI_change_af(DBC, DBCps, BCPNSD, BCI_rate)
+	else:
+		BCI_rate = 0
 	
 	# complex refractive index change
 	
@@ -588,24 +756,43 @@ def run(dz, wl, RH, **args):
 	if debug:
 		print('n:', nShell)
 	
-	if nH1_rate_on:
-		nH1 = nH1 * (nH1_rate-1)
+	'''
+	if k_rate_on:
+		kBC = kBC * kBC_rate
+	elif k_on:
+		kBC_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * k_range
+		kBC = kBC * kBC_rate
+	else:
+		k_rate = 0
+	'''
+	if nI_rate_on:
+		nI = 0.1 * (nI_rate-1)
 		# for input rate, the calculate formula is 1 + (-1~1) * range
 		# to get -0.03 ~ 0.03, use the calculation above
-	elif nH1_on:
-		nH1_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * nH1_range
+	elif nI_on:
+		nI_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * nI_range
 		# according to Zhao 2020, the maximum n change range is 0.02
 		# let 0.1 multiply by nI default range 0.3 get 0.03
-		nH1 = nH1 * (nH1_rate-1)
+		nI = 0.1 * (nI_rate-1)
 	else:
-		nH1_rate = 0
-		nH1 = 0
+		nI_rate = 0
+		nI = 0
+	
+	if nI2_rate_on:
+		nI2y = nI2 * nI2_rate
+	elif nI2_on:
+		nI2_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * nI2_range
+		nI2y = nI2 * nI2_rate
+	else:
+		nI2_rate = 0
+		nI2x = 1
+		nI2y = 0
 	if debug:
-		print('n heterogeneity 1 : ', nH1)
+		print('n mixing state:', nI)
 	
 	# rhoBC to calculate new nBC and kBC
 	
-	nBC, kBC = calBC.rhoBC2mBC(rhoBC)
+	#nBC, kBC = calBC.rhoBC2mBC(rhoBC)
 	
 	if nBC_rate_on:
 		nBC = nBC * nBC_rate
@@ -629,6 +816,20 @@ def run(dz, wl, RH, **args):
 	
 	# other microphysical properties change
 	
+	if VD_rate_on:
+		VD = VD * VD_rate
+		if VD > 1:
+			VD = 1
+	elif VD_on:
+		VD_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * VD_range
+		VD = VD * VD_rate
+		if VD > 1:
+			VD = 1
+	else:
+		VD_rate = 0
+	if debug:
+		print('Vertical distribution:', VD)
+	
 	if CT_rate_on:
 		CT = CT_rate
 	elif CT_on:
@@ -639,17 +840,6 @@ def run(dz, wl, RH, **args):
 		CT_rate = 0
 	if debug:
 		print('Coating thickness:', CT)
-	
-	if CTH1_rate_on:
-		CTH1 = CTH1 * CTH1_rate
-	elif CTH1_on:
-		CTH1_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * CTH1_range
-		CTH1 = CTH1 * CTH1_rate
-	else:
-		CTH1_rate = 0
-		CTH1 = 0
-	if debug:
-		print('CT heterogeneity 1 : ', CTH1)
 	
 	if kappa_rate_on:
 		kappa = kappa * kappa_rate
@@ -663,17 +853,26 @@ def run(dz, wl, RH, **args):
 	
 	# read kappa mixing state data. If not exist, using default data
 	
-	if kappaH1_rate_on:
-		kappaH1 = kappaH1 * (kappaH1_rate-1)
-	elif kappaH1_on:
-		kappaH1_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * kappaH1_range
+	if kappaI_rate_on:
+		kappaI = 0.33 * (kappaI_rate-1)
+	elif kappaI_on:
+		kappaI_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * kappaI_range
 		# 0.33 multiple by 0.3, max range equal to 0.1
-		kappaH1 = kappaH1 * (kappaI_rate-1)
+		kappaI = 0.33 * (kappaI_rate-1)
 	else:
-		kappaH1_rate = 0
-		kappaH1 = 0
+		kappaI_rate = 0
+		kappaI = 0
+	if kappaI2_rate_on:
+		kappaI2y = kappaI2 * kappaI2_rate
+	elif kappaI2_on:
+		kappaI2_rate = 1 + random.normalvariate(mu=0,sigma=1/3) * kappaI2_range
+		kappaI2y = kappaI2 * kappaI2_rate
+	else:
+		kappaI2_rate = 0
+		kappaI2x = 1
+		kappaI2y = 0
 	if debug:
-		print('kappa heterogeneity 1 : ', kappaH1)
+		print('kappa mixing state:', kappaI)
 	
 	if BCAE_rate_on:
 		BCAE = BCAE_rate
@@ -694,7 +893,7 @@ def run(dz, wl, RH, **args):
 	g = np.zeros(len(wl))
 	
 	for i in range(len(wl)):
-		AOD[i], SSA[i], g[i] = calMie.Mie2(Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell, nH1, kappa, kappaH1, MS, MSH1, MSH2x, MSH2y, dz, RH, wl, CT, CTH1, BCAE, debug=debug)
+		AOD[i], SSA[i], g[i] = calMie.Mie(Dps, PNSD, DBCps, DBC, BCPNSD, nBC, kBC, nShell, nI, nI2x, nI2y, kappa, kappaI, kappaI2x, kappaI2y, RH, wl[i], Z, dZ, BCAE, CT, VD, 1, debug=debug)
 		if debug:
 			print('AOD :', AOD[i], ',\tSSA :', SSA[i], ',\tg :', g[i])
 	
@@ -718,186 +917,45 @@ def run(dz, wl, RH, **args):
 	BCAE for BC absorbing enhancement
 	'''
 	
-	infos = dict(AOD=AOD, SSA=SSA, g=g, n_rate=n_rate, nH1_rate=nH1_rate, nBC_rate=nBC_rate, kBC_rate=kBC_rate, PNSD_rate=PNSD_rate, MS_rate=MS_rate, MSH1_rate=MSH1_rate, MSH2_rate=MSH2_rate, CT_rate=CT_rate, CTH1_rate=CTH1_rate, kappa_rate=kappa_rate, kappaH1_rate=kappaH1_rate, rhoBC_rate=rhoBC_rate, BCPNSD_rate=BCPNSD_rate, BCAE_rate=BCAE_rate)
-	print(infos)
-	return infos, paras
+	infos = dict(AOD=AOD, SSA=SSA, g=g, n_rate=n_rate, nI_rate=nI_rate, nI2_rate=nI2_rate, nBC_rate=nBC_rate, kBC_rate=kBC_rate, PNSD_rate=PNSD_rate, MS_rate=MS_rate, VD_rate=VD_rate, CT_rate=CT_rate, kappa_rate=kappa_rate, kappaI_rate=kappaI_rate, kappaI2_rate=kappaI2_rate, rhoBC_rate=rhoBC_rate, BCPNSD_rate=BCPNSD_rate, BCPMSD_rate=BCPMSD_rate, BCI_rate=BCI_rate, BCAE_rate=BCAE_rate)
+	return infos
 
 def make_dir(time, **args):
 	'''
 	This function is to make directory for runMie code output
 	input:
 		time         : year month and day, string, for example 220921
-		**paras      : parameters list, array, in string, default all parameters
+		**parameters : parameters list, array, in string, default all parameters
 	output:
 		parameter directory with time
 	'''
-	if 'paras' in args:
-		paras = args['paras']
+	if 'parameters' in args:
+		parameters = args['parameters']
 	else:
-		paras = default_paras
+		parameters = default_paras
 	
 	import os
 	
 	path = 'output/Mie/' + time
 	os.system('mkdir '+path)
 	os.system('mkdir '+path+'/all')
-	for i in range(len(paras)):
-		fn = path + '/' + paras[i]
+	for i in range(len(parameters)):
+		fn = path + '/' + parameters[i]
 		os.system('mkdir '+fn)
 
-def LHS_run(time, run_num, par_range, **args):
+def LHS_run(time, run_num, par_range):
 	'''
 	This function is to circulation run Mie in Latin hypercubic sampling method
 	input:
 		time      : running time to record
 		run_num   : running times number
 		par_range : parameters change range
-		**debug   : debug flag, bool, default False
 	output:
 		aerosol optical parameter information, including:
 			AOD   : aerosol optical depth
 			SSA   : single scattering albedo
 			g     : asymmetry factor
 	'''
-	if 'debug' in args:
-		debug = args['debug']
-	else:
-		debug = False
-	
-	#read data
-	
-	sp2 = readTaizhou.read_Taizhou('data/sp2/Taizhou.npy')
-	Dps = sp2['Dps']
-	DBC = sp2['DBC']
-	DBCps = sp2['DBCps']
-	PNSD = sp2['PNSD']
-	DMASP2 = sp2['DMASP2']
-	
-	# turn time sequent data to mean data
-	PNSD = np.nanmean(PNSD, axis=0)
-	DMASP2 = np.nanmean(DMASP2, axis=0)
-	# turn DMASP2 to BCPNSD,
-	# due to DBCps has different dlogDBCps by bin, have to do special treatment
-	BCPNSD = np.zeros(DMASP2.shape) # turn dn/dlogDBC to dn/dlogDBCps/dlogDBC
-	for i in range(len(DBCps)):
-		dlogDBC = calPNSD.cal_dlnDp(DBC)
-		if i<len(DBCps)-1:
-			dlogDBCps_i = np.log10(DBCps[i+1]/DBCps[i])
-		else:
-			dlogDBCps_i = np.log10(DBCps[i]/DBCps[i-1])
-		BCPNSD[i] = DMASP2[i] / dlogDBCps_i
-	
-	clean_PNSD = PNSD / 50 # to fit Beijing aerosol number distribution level
-	dirty_PNSD = PNSD / 10
-	clean_BCPNSD = BCPNSD / 10
-	dirty_BCPNSD = BCPNSD / 2
-	
-	# use LHS produce all parameters for whole run
-	
-	parameters = default_paras
-	
-	par_num = len(parameters)
-	all_rate = np.zeros((par_num, run_num))
-	paras_rate = np.zeros((par_num, par_num, run_num))
-	
-	# for all run and parameter run
-	
-	for i in range(par_num):
-		all_rate[i] = 1 + LHS_norm(run_num, 0, 1/3).flatten() * default_range
-	
-	for i in range(par_num):
-		for j in range(par_num):
-			if i == j:
-				paras_rate[i,j] = 1 + LHS_norm(run_num, 0, 1/3).flatten() * par_range
-			else:
-				paras_rate[i,j] = all_rate[j]
-	
-	make_dir(time)
-	
-	#start running
-	
-	path = 'output/Mie/' + time + '/'
-	
-	infos = []
-	for i in range(run_num):
-		info, paras = run(1000, [525], 70, MSH2x=5, 
-		n_rate			= all_rate[0,i], 
-		nH1_rate		= all_rate[1,i], 
-		nBC_rate		= all_rate[2,i], 
-		kBC_rate		= all_rate[3,i], 
-		PNSD_rate		= all_rate[4,i], 
-		MS_rate			= all_rate[5,i], 
-		MSH1_rate		= all_rate[6,i], 
-		MSH2_rate		= all_rate[7,i], 
-		CT_rate			= all_rate[8,i], 
-		CTH1_rate		= all_rate[9,i], 
-		kappa_rate		= all_rate[10,i], 
-		kappaH1_rate	= all_rate[11,i], 
-		rhoBC_rate		= all_rate[12,i], 
-		BCPNSD_rate		= all_rate[13,i], 
-		BCAE_rate		= all_rate[14,i], 
-		Dps=Dps, DBC=DBC, DBCps=DBCps, clean_PNSD=clean_PNSD, dirty_PNSD=dirty_PNSD, clean_BCPNSD=clean_BCPNSD, dirty_BCPNSD=dirty_BCPNSD, debug=debug)
-		infos.append(info)
-		np.save(path+'all/infos.npy', infos)
-		if i==0:
-			np.save(path+'all/paras.npy', paras)
-	
-	for i in range(par_num):
-		infos = []
-		for j in range(run_num):
-			info, paras = run(1000, [525], 70, MSH2x=5, 
-			n_rate			= paras_rate[i,0,j], 
-			nH1_rate		= paras_rate[i,1,j], 
-			nBC_rate		= paras_rate[i,2,j], 
-			kBC_rate		= paras_rate[i,3,j], 
-			PNSD_rate		= paras_rate[i,4,j], 
-			MS_rate			= paras_rate[i,5,j], 
-			MSH1_rate		= paras_rate[i,6,j], 
-			MSH2_rate		= paras_rate[i,7,j], 
-			CT_rate			= paras_rate[i,8,j], 
-			CTH1_rate		= paras_rate[i,9,j], 
-			kappa_rate		= paras_rate[i,10,j], 
-			kappaH1_rate	= paras_rate[i,11,j], 
-			rhoBC_rate		= paras_rate[i,12,j], 
-			BCPNSD_rate		= paras_rate[i,13,j], 
-			BCAE_rate		= paras_rate[i,14,j], 
-			Dps=Dps, DBC=DBC, DBCps=DBCps, clean_PNSD=clean_PNSD, dirty_PNSD=dirty_PNSD, clean_BCPNSD=clean_BCPNSD, dirty_BCPNSD=dirty_BCPNSD, debug=debug)
-			infos.append(info)
-			np.save(path+parameters[i]+'/infos.npy', infos)
-
-"""
-def co_run(time, run_num, par_range, paras, co_paras, **args):
-####################################################################################
-# warning:
-# this function may have problems in math
-####################################################################################
-	'''
-	This function is to use LHS_run to test synergy of several parameters
-	input:
-		time      : running time to record
-		run_num   : running times number
-		par_range : parameters change range
-		paras     : parameters list, array, string
-		co_paras  : parameters list to calculate synergy, array, string, 
-		            in shape (co_num, co_paras_num)
-		**debug   : debug flag, bool, default False
-	output:
-		aerosol optical parameter information, including:
-			AOD   : aerosol optical depth
-			SSA   : single scattering albedo
-			g     : asymmetry factor
-	'''
-	if 'debug' in args:
-		debug = args['debug']
-	else:
-		debug = False
-	
-	#co_paras must in paras
-	for i in range(len(co_paras)):
-		for j in range(len(co_paras[i])):
-			if co_paras[i][j] not in paras:
-				print('Co-paras not in paras. Please check.')
-				sys.exit()
 	
 	#read data
 	
@@ -937,39 +995,25 @@ def co_run(time, run_num, par_range, paras, co_paras, **args):
 	
 	# use LHS produce all parameters for whole run
 	
-	par_num = len(paras)
-	all_num = len(default_paras)
-	co_num = len(co_paras)
+	parameters = default_paras
 	
-	all_rate = np.zeros((all_num, run_num))
-	paras_rate = np.zeros((par_num, all_num, run_num))
-	co_rate = np.zeros((co_num, all_num, run_num))
+	par_num = len(parameters)
+	all_rate = np.zeros((par_num, run_num))
+	paras_rate = np.zeros((par_num, par_num, run_num))
 	
-	# for all run, parameter run and co run
+	# for all run and parameter run
 	
-	for i in range(all_num):
+	for i in range(par_num):
 		all_rate[i] = 1 + LHS_norm(run_num, 0, 1/3).flatten() * default_range
 	
 	for i in range(par_num):
-		for j in range(all_num):
-			if paras[i] == default_paras[j]:
+		for j in range(par_num):
+			if i == j:
 				paras_rate[i,j] = 1 + LHS_norm(run_num, 0, 1/3).flatten() * par_range
 			else:
 				paras_rate[i,j] = all_rate[j]
 	
-	for i in range(co_num):
-		for j in range(all_num):
-			if default_paras[j] in co_paras[i]: # paras rate would be same as single para rate
-				co_rate[i,j] = paras_rate[paras.index(default_paras[j]),j]
-			else:
-				co_rate[i,j] = all_rate[j]
-	
-	# sum co_paras' name
-	for i in range(co_num):
-		sep = '+'
-		paras.append(sep.join(co_paras[i]))
-	
-	make_dir(time, paras=paras)
+	make_dir(time)
 	
 	#start running
 	
@@ -978,7 +1022,7 @@ def co_run(time, run_num, par_range, paras, co_paras, **args):
 	infos = []
 	for i in range(run_num):
 		info = run(2000, 100, [525], nI2x=2, kappaI2x=2,
-		n_rate=		all_rate[0,i], 
+		n_rate=	all_rate[0,i], 
 		nI_rate=	all_rate[1,i], 
 		nI2_rate=	all_rate[2,i],
 		nBC_rate=	all_rate[3,i], 
@@ -995,15 +1039,15 @@ def co_run(time, run_num, par_range, paras, co_paras, **args):
 		#BCPMSD_rate=	all_rate[14,i], 
 		BCI_rate=	all_rate[15,i], 
 		BCAE_rate=	all_rate[16,i], 
-		Dps=Dps, DBC=DBC, DBCps=DBCps, clean_PNSD=clean_PNSD, dirty_PNSD=dirty_PNSD, clean_BCPNSD=clean_BCPNSD, dirty_BCPNSD=dirty_BCPNSD, DBC2=DBC2, clean_BCPMSD=clean_BCPMSD, dirty_BCPMSD=dirty_BCPMSD, debug=debug)
+		Dps=Dps, DBC=DBC, DBCps=DBCps, clean_PNSD=clean_PNSD, dirty_PNSD=dirty_PNSD, clean_BCPNSD=clean_BCPNSD, dirty_BCPNSD=dirty_BCPNSD, DBC2=DBC2, clean_BCPMSD=clean_BCPMSD, dirty_BCPMSD=dirty_BCPMSD, debug=True)
 		infos.append(info)
-		np.save(path+'all/infos.npy', infos) # save info every single calculation
+		np.save(path+'all/infos.npy', infos)
 	
 	for i in range(par_num):
 		infos = []
 		for j in range(run_num):
 			info = run(2000, 100, [525], nI2x=2, kappaI2x=2,
-			n_rate=		paras_rate[i,0,j], 
+			n_rate=	paras_rate[i,0,j], 
 			nI_rate=	paras_rate[i,1,j], 
 			nI2_rate=	paras_rate[i,2,j],
 			nBC_rate=	paras_rate[i,3,j], 
@@ -1020,42 +1064,12 @@ def co_run(time, run_num, par_range, paras, co_paras, **args):
 			#BCPMSD_rate=	paras_rate[i,14,j], 
 			BCI_rate=	paras_rate[i,15,j], 
 			BCAE_rate=	paras_rate[i,16,j], 
-			Dps=Dps, DBC=DBC, DBCps=DBCps, clean_PNSD=clean_PNSD, dirty_PNSD=dirty_PNSD, clean_BCPNSD=clean_BCPNSD, dirty_BCPNSD=dirty_BCPNSD, DBC2=DBC2, clean_BCPMSD=clean_BCPMSD, dirty_BCPMSD=dirty_BCPMSD, debug=debug)
+			Dps=Dps, DBC=DBC, DBCps=DBCps, clean_PNSD=clean_PNSD, dirty_PNSD=dirty_PNSD, clean_BCPNSD=clean_BCPNSD, dirty_BCPNSD=dirty_BCPNSD, DBC2=DBC2, clean_BCPMSD=clean_BCPMSD, dirty_BCPMSD=dirty_BCPMSD, debug=True)
 			infos.append(info)
-			np.save(path+paras[i]+'/infos.npy', infos)
-	
-	for i in range(co_num):
-		infos = []
-		for j in range(run_num):
-			info = run(2000, 100, [525], nI2x=2, kappaI2x=2,
-			n_rate=		co_rate[i,0,j], 
-			nI_rate=	co_rate[i,1,j], 
-			nI2_rate=	co_rate[i,2,j],
-			nBC_rate=	co_rate[i,3,j], 
-			kBC_rate=	co_rate[i,4,j], 
-			PNSD_rate=	co_rate[i,5,j], 
-			MS_rate=	co_rate[i,6,j], 
-			#VD_rate=	co_rate[i,7,j], 
-			CT_rate=	co_rate[i,8,j], 
-			kappa_rate=	co_rate[i,9,j], 
-			kappaI_rate=	co_rate[i,10,j], 
-			kappaI2_rate=	co_rate[i,11,j], 
-			rhoBC_rate=	co_rate[i,12,j], 
-			#BCPNSD_rate=	co_rate[i,13,j], 
-			#BCPMSD_rate=	co_rate[i,14,j], 
-			BCI_rate=	co_rate[i,15,j], 
-			BCAE_rate=	co_rate[i,16,j], 
-			Dps=Dps, DBC=DBC, DBCps=DBCps, clean_PNSD=clean_PNSD, dirty_PNSD=dirty_PNSD, clean_BCPNSD=clean_BCPNSD, dirty_BCPNSD=dirty_BCPNSD, DBC2=DBC2, clean_BCPMSD=clean_BCPMSD, dirty_BCPMSD=dirty_BCPMSD, debug=debug)
-			infos.append(info)
-			np.save(path+paras[i-co_num]+'/infos.npy', infos)
-"""
+			np.save(path+parameters[i]+'/infos.npy', infos)
 
 if __name__ == '__main__':
-	LHS_run('240604', 2000, 0.05, debug=True)
-	#co_run('230916_n_kappa', 10000, 0.05, ['n','kappa'], debug=True)
-	#co_run('230916_MS_CT', 10000, 0.05, ['MS','CT'], debug=True)
-	#co_paras = [['n','kappa'], ['MS','CT']]
-	#co_run('230917', 5000, 0.05, main_paras, co_paras, debug=True)
+	LHS_run('230604', 5000, 0.05)
 	
 	
 	

@@ -183,15 +183,15 @@ def write(**args):
 	if 'ngrid' in args:
 		ngrid = args['ngrid']
 	else:
-		ngrid = 50
+		ngrid = 15
 	if 'zgrid1' in args:
 		zgrid1 = args['zgrid1']
 	else:
-		zgrid1 = 0.1
+		zgrid1 = 0.2
 	if 'zgrid2' in args:
 		zgrid2 = args['zgrid2']
 	else:
-		zgrid2 = 1
+		zgrid2 = 10
 	if 'nstr' in args:
 		nstr = args['nstr']
 	else:

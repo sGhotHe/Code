@@ -1,3 +1,7 @@
+WARNING >>>>> CHEKIN--vertical temperature step may be too large for good accuracy
+
+######################################################################
+
 &INPUT
 	wlinf = 0.47
 	wlsup = 2.1

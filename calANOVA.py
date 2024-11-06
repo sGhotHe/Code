@@ -4,7 +4,7 @@
 # Created by Hebs at 23/5/8/9:08
 # Contact: hebishuo@pku.edu.cn
 ####################################################################################
-
+'''
 default_paras = [] # default parameters list
 default_paras.append('n')
 default_paras.append('nI')
@@ -23,6 +23,25 @@ default_paras.append('BCPNSD')
 default_paras.append('BCPMSD')
 default_paras.append('BCI')
 default_paras.append('BCAE')
+'''
+default_paras = [] # default parameters list
+default_paras.append('n')
+default_paras.append('nI')
+default_paras.append('nI2')
+default_paras.append('nBC')
+default_paras.append('kBC')
+default_paras.append('PNSD')
+default_paras.append('MS')
+default_paras.append('VD')
+default_paras.append('CT')
+default_paras.append('kappa')
+default_paras.append('kappaI')
+default_paras.append('kappaI2')
+default_paras.append('rhoBC')
+default_paras.append('BCPNSD')
+default_paras.append('BCAE')
+default_paras.append('amb')
+default_paras.append('albedo')
 
 import numpy as np
 
@@ -92,11 +111,13 @@ def cal(dtime, **args):
 		paras = args['paras']
 	else:
 		paras = default_paras
+	if 'outputs' in args:
+		outputs = args['outputs']
+	else:
+		outputs = ['AOD', 'SSA', 'g']
 	
 	path = path + dtime + '/all/'
 	par_num = len(paras)
-	
-	outputs = ['AOD', 'SSA', 'g']
 	out_num = len(outputs)
 	
 	data = np.load(path+'infos.npy', allow_pickle=True)
@@ -121,7 +142,8 @@ def cal(dtime, **args):
 	return ANOVA
 
 if __name__ == '__main__':
-	ANOVA = cal('230530', K=10, paras=['n','nI','rhoBC'])
+	#ANOVA = cal('230530', K=10, paras=['n','nI','rhoBC'])
+	ANOVA = cal('240310', path='output/DARF/', K=10, outputs=['RF_top','RF_bot'])
 	print(ANOVA)
 	
 	

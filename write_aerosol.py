@@ -109,7 +109,7 @@ def write_old(fn, nn, moma, wl, m, **args):
 	
 	print('done')
 
-def write_old(fn, nn, moma, wl, m_BC, **args):
+def write_old2(fn, nn, moma, wl, m_BC, **args):
 	'''
 	This function is to use DMA-SP2, SMPS and nephelometer data to write aerosol.dat for SBDART
 	input:
@@ -327,6 +327,11 @@ def write(nn, moma, Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell, kappa, CT, 
 		print('Too many aerosol layers. Please check.')
 		sys.exit()
 	
+	###############################################################################
+	# WARNING
+	# the nn should bigger than INPUT.ngrid
+	###############################################################################
+	
 	# turn water vapor density in g/m3 to RH, in %
 	RH = np.zeros(len(wh))
 	for i in range(len(RH)):
@@ -338,9 +343,16 @@ def write(nn, moma, Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell, kappa, CT, 
 	
 	print('done\ncalculating...')
 	
+	###################################################################
+	# nShell = -1.293e-3 * RH + 1.484
+	###################################################################
+	
 	dtau = np.zeros((len(wl), nn))
 	waer = np.zeros((len(wl), nn))
 	pmom = np.zeros((len(wl), nn, moma))
+	########################################
+	g = np.zeros((len(wl), nn))
+	########################################
 	
 	for i in range(len(wl)):
 		for j in range(nn):
@@ -351,6 +363,57 @@ def write(nn, moma, Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell, kappa, CT, 
 			print(round((j+i*nn+1)/(len(wl)*nn)*1000)/10, '% done...')
 	
 	print('done\nwriting...')
+	
+	with open(output, 'w') as f:
+		f.write(str(nn)+'\t'+str(moma)+'\n')
+		for i in range(len(wl)):
+			f.write(str(wl[i])+'\n')
+			for j in range(nn):
+				f.write(str(dtau[i,j])+'\t'+str(waer[i,j])+'\t')
+				for k in range(moma):
+					f.write(str(pmom[i,j,k])+'\t')
+				f.write('\n')
+
+def write2(wl, nn, moma, dtau, waer, pmom, **args):
+	'''
+	This function is to use dtau, waer and pmom data to write aerosol.dat
+	input:
+		wl			: the wavelength [ wl(k) < wl(k+1) ], np.array, nm
+		nn			: number of atmospheric levels for which aerosol information is specified, int
+		moma		: number of the phase function's legendre moments, int
+		dtau		: aerosol optical depth, np.array, in shape (len(wl), nn)
+		waer		: single scattering albedo, np.array, in shape (len(wl), nn)
+		pmom		: legendre moments of phase function, np.array, in shape (len(wl), nn, moma)
+		**output	: aerosol.dat storage path, defualt 'aerosol.dat', string
+		**debug		: debug flag, default False, bool
+	output:
+		aerosol.dat	: aerosol information for SBDART
+		where 
+                    nn          is the number of atmospheric levels for
+                                which aerosol information is specified.
+
+                    moma        number of phase function moments
+
+                    wl(k)       is the wavelength [ wl(k) < wl(k+1) ]
+
+                    dtau(i,k)   is the optical depth increment within
+                                level i at wavelength k, information is
+                                specified in top-down order. 
+
+                    waer(i,k)   is the single scattering albedo
+
+                    pmom(m,i,k) are legendre moments of the phase function.
+                                Note that zeroeth moment is not read, it
+                                is assumed to be 1.
+	'''
+	if 'output' in args:
+		output = args['output']
+	else:
+		output = 'aerosol.dat'
+	if 'debug' in args:
+		debug = args['debug']
+	else:
+		debug = False
 	
 	with open(output, 'w') as f:
 		f.write(str(nn)+'\t'+str(moma)+'\n')
@@ -497,10 +560,14 @@ def change_back(**args):
 		print('No origin file aerosol.dat_origin. Please check.')
 
 if __name__ == '__main__':
+	# for Qiujie
 	sp2 = readTaizhou.read_Taizhou('data/sp2/Taizhou.npy')
 	DBC = sp2['DBC']
 	DBCps = sp2['DBCps']
 	BCPNSD = np.zeros(sp2['DMASP2'][0].shape) # no BC core
+	Dps = sp2['Dps']
+	PNSD = sp2['PNSD']
+	PNSD = np.nanmean(PNSD, axis=0)/10
 	
 	Dps = []
 	PNSD = []
@@ -512,10 +579,105 @@ if __name__ == '__main__':
 			Dps.append(float(res[0]))
 			PNSD.append(float(res[1]))
 	
-	Dps = np.array(Dps)
-	PNSD = np.array(PNSD)
+	Dps = np.array(Dps)[:70]
+	PNSD = np.array(PNSD)[:70]
 	
-	write(50, 6, Dps, PNSD, DBCps, DBC, BCPNSD, 1, 1, 1.4884+1e-3j, 1.24, 1, 1, [440,500,870,1640], 28/(28+39))
+	'''
+	nShell = np.arange(1.36,1.51+1e-3,0.01)
+	nShell = np.append(nShell, 1.484)
+	
+	kappa = np.arange(1.18,1.5+1e-3,0.01)
+	'''
+	nShell = [1.484, 1.51, 1.53]
+	kappa = 1.2
+	RH = [40, 50, 60, 70, 80, 90, 96]
+	wl = 500
+	
+	kBC = 1
+	nBC = 1
+	nI = 0
+	nI2x = 1
+	nI2y = 0
+	kappaI = 0
+	kappaI2x = 1
+	kappaI2y = 0
+	MS = 0
+	VD = 28 / (28+39)
+	CT = 1
+	BCAE = 1
+	nn = 10
+	moma = 6
+	angularResolution = 30
+	debug = True
+	'''
+	AOD = np.zeros((len(nShell),len(wl)))
+	SSA = np.zeros((len(nShell),len(wl)))
+	g = np.zeros((len(nShell),len(wl)))
+	DARF = np.zeros(len(nShell))
+	DOWN = np.zeros(len(nShell))
+	UP = np.zeros(len(nShell))
+	'''
+	kext = np.zeros((len(nShell),len(RH)))
+	g = np.zeros((len(nShell),len(RH)))
+	
+	import write_INPUT
+	import read11
+	import readAOD
+	import calDARF
+	import calNI
+	
+	for i in range(len(nShell)):
+		for j in range(len(RH)):
+			kext[i,j], waer, pmom, g[i,j] = calNI.cal_Mie2(Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell[i], nI, nI2x, nI2y, kappa, kappaI, kappaI2x, kappaI2y, MS, RH[j], wl, moma, CT, BCAE, angularResolution=30)
+			print(round((j+i*len(RH)+1)/(len(RH)*len(nShell))*1000)/10, '% done...')
+	
+	with open('result.txt', 'w') as f:
+		f.write('RI = 1.484, wavelength = 500 nm\n')
+		for i in range(len(nShell)):
+			f.write('RI\t')
+			f.write(str(nShell[i])+'\n')
+			f.write('RH\tkext\tg\n')
+			for j in range(len(RH)):
+				f.write(str(RH[j])+'\t')
+				f.write(str(kext[i,j])+'\t')
+				f.write(str(g[i,j])+'\t')
+				f.write('\n')
+	'''
+		dtau = np.zeros((len(wl),nn))
+		waer = np.zeros((len(wl),nn))
+		g = np.zeros((len(wl),nn))
+		pmom = np.zeros((len(wl),nn,moma))
+		
+		dtau, waer, pmom, g = calDARF.DARF(Dps, PNSD, DBCps, DBC, BCPNSD, kBC, nBC, nShell[i]+0.05j, nI, nI2x, nI2y, kappa, kappaI, kappaI2x, kappaI2y, MS, VD, CT, BCAE, wl, nn, moma, angularResolution=angularResolution, debug=debug)
+		
+		write2(wl, nn, moma, dtau, waer, pmom)
+		write_INPUT.write(iaer=0)
+		os.system('sbdart > 00.txt')
+		write_INPUT.write()
+		os.system('sbdart > 01.txt')
+		wl_i, AOD[i] = readAOD.read(fn='aerosol.dat')
+		infos0 = read11.read11(filename='00.txt')
+		infos1 = read11.read11(filename='01.txt')
+		DOWN[i] = infos1['fxdn'][0]
+		UP[i] = infos1['fxup'][0]
+		DARF[i] = (infos1['fxdn'][0]-infos1['fxup'][0]) - (infos0['fxdn'][0]-infos0['fxup'][0])
+		
+	with open('result.txt', 'w') as f:
+		f.write('RI\t')
+		for i in range(len(wl)):
+			f.write('wavelength '+str(i)+'\t')
+			f.write('AOD '+str(i)+'\t')
+		f.write('DOWN\tUP\tDARF\n')
+		for i in range(len(nShell)):
+			f.write(str(nShell[i])+'\t')
+			for j in range(len(wl)):
+				f.write(str(wl[j])+'\t')
+				f.write(str(AOD[i,j])+'\t')
+			f.write(str(DOWN[i])+'\t')
+			f.write(str(UP[i])+'\t')
+			f.write(str(DARF[i])+'\n')
+	'''
+		
 	
 	
 	

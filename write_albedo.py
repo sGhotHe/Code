@@ -122,7 +122,9 @@ def write_location():
 		os.system('mv input/albedo/Heilongjiang/albedo.dat input/albedo/Heilongjiang/albedo.dat_'+str(month[i]))
 
 if __name__ == '__main__':
-	write(126, 26, 2019, month=6, day=1)
+	write(116, 40, 2019, month=6, day=1)
+	#write(126, 26, 2019, month=6, day=1)
+	
 	
 	
 	

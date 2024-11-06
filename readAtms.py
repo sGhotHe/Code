@@ -8,10 +8,11 @@
 import numpy as np
 import re
 
-def read():
+def read(**args):
 	'''
 	This function is to read data from atms.dat
 	input:
+		**fn   : file name, string, default 'atms.dat'
 	output:
 		atms : atmosphere data, dictionary
 			nn : number of atmosperic layers
@@ -20,7 +21,12 @@ def read():
 			wh : water vapor density in g/m^3
 			wo : ozone density in g/m^3
 	'''
-	with open('atms.dat', 'r') as f:
+	if 'fn' in args:
+		fn = args['fn']
+	else:
+		fn = 'atms.dat'
+	
+	with open(fn, 'r') as f:
 		nn = int(f.readline())
 		z = np.zeros(nn)
 		p = np.zeros(nn)
@@ -45,3 +51,35 @@ if __name__ == '__main__':
 	atms = read()
 	print(atms['z'])
 	print(atms['z'][::-1])
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	

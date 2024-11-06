@@ -334,8 +334,8 @@ def plot_corr(dtime, **args):
 	plt.close()
 
 if __name__ == '__main__':
-	#plot_residual('230222', save=False)
-	plot_corr('230327', save=False)
+	plot_residual('230604', save=False)
+	#plot_corr('230604', save=False)
 	
 	
 	

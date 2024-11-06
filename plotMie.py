@@ -7,22 +7,25 @@
 
 default_paras = [] # default parameters list
 default_paras.append('n')
-default_paras.append('nI')
-default_paras.append('nI2')
+default_paras.append('nH1')
 default_paras.append('nBC')
 default_paras.append('kBC')
 default_paras.append('PNSD')
 default_paras.append('MS')
-default_paras.append('VD')
+default_paras.append('MSH1')
+default_paras.append('MSH2')
 default_paras.append('CT')
+default_paras.append('CTH1')
 default_paras.append('kappa')
-default_paras.append('kappaI')
-default_paras.append('kappaI2')
+default_paras.append('kappaH1')
 default_paras.append('rhoBC')
 default_paras.append('BCPNSD')
-default_paras.append('BCPMSD')
-default_paras.append('BCI')
 default_paras.append('BCAE')
+
+default_outputs = [] # default outputs list
+default_outputs.append('AOD')
+default_outputs.append('SSA')
+default_outputs.append('g')
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,6 +33,7 @@ import sys
 import time
 
 import calCons
+import calOAT
 
 def read_rate(parameter, path):
 	'''
@@ -508,29 +512,152 @@ def norm_cdf(x, loc, scale, **args):
 		y += dy
 	return y
 
+def plot_OATvsCP(dtime, par_range, **args):
+	'''
+	This function is to plot OAT and CP sensitivity results
+	input:
+		dtime		: runDARF.py output time, string, example: '230101'
+		par_range	: parameter change rate range, float
+		**paras		: parameters list, array, string, default default_paras
+		**outputs	: outputs list, array, string, default default_outputs
+		**save		: save flag, bool, default False
+		**save_path	: save path, string, default 'figure/DARF/
+	output:
+		figure
+	'''
+	if 'paras' in args:
+		paras = args['paras']
+	else:
+		paras = default_paras
+	if 'outputs' in args:
+		outputs = args['outputs']
+	else:
+		outputs = default_outputs
+	if 'save' in args:
+		save = args['save']
+	else:
+		save = False
+	if 'save_path' in args:
+		save_path = args['save_path']
+	else:
+		save_path = 'figure/DARF/'
+	
+	# read data
+	
+	OAT = calOAT.cal(dtime, outputs=outputs, paras=paras)['OAT']
+	CP = calCons.cal(dtime, par_range, outputs=outputs, paras=paras)['Cons']
+	
+	vs = abs((OAT-CP)/CP)
+	vs[np.isnan(vs)] = -1 # turn np.nan to 1
+	vs[np.isinf(vs)] = -1 # turn np.inf to 1
+	out_num = len(outputs)
+	par_num = len(paras)
+	
+	# change parameter names
+	'''
+	for i in range(par_num):
+		if paras[i]=='n':
+			paras[i] = 'n_shell'
+		if paras[i]=='nI':
+			paras[i] = 'n_shell H1'
+		if paras[i]=='nI2':
+			paras[i] = 'n_shell H2'
+		if paras[i]=='nBC':
+			paras[i] = 'n_BC'
+		if paras[i]=='kBC':
+			paras[i] = 'k_BC'
+		#if paras[i]=='MS':
+		#	paras[i] = 'Mixing state'
+		#if paras[i]=='VD':
+		#	paras[i] = 'Vertical distribution'
+		#if paras[i]=='CT':
+		#	paras[i] = 'Coating thickness'
+		if paras[i]=='kappaI':
+			paras[i] = 'kappa H1'
+		if paras[i]=='kappaI2':
+			paras[i] = 'kappa H2'
+		if paras[i]=='rhoBC':
+			paras[i] = '\u03C1_BC'
+		#if paras[i]=='BCAE':
+		#	paras[i] = 'BC absorbing enhancement'
+		if paras[i]=='amb':
+		#	paras[i] = 'Atmospheric parameters'
+			paras[i] = 'AEP'
+	'''
+	# set plot parameters
+	
+	fs = 8 # fontsize
+	fw = 'bold' # fontweight
+	width = 0.4 # bar width
+	lw = 2 # line width
+	rotation = 45 # x labels rotaion angle
+	
+	ylim = np.zeros(out_num)
+	for i in range(out_num):
+		ylim[i] = max(np.max(OAT[i]),np.max(CP[i]))
+	
+	plt.figure(figsize=(10,6))
+	plt.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.2, wspace=0.1, hspace=0.15)
+	
+	# start plotting
+	
+	for i in range(out_num):
+		ax = plt.subplot(out_num,1,i+1)
+		# main plot function
+		for j in range(par_num):
+			if i==0 and j==0:
+				plt.bar(j+1-width/2, CP[i,j], width=width, label='CP', color='k')
+				plt.bar(j+1+width/2, OAT[i,j], width=width, label='OAT', color='gray')
+				plt.legend(fontsize=fs, loc='upper right')
+			else:
+				plt.bar(j+1-width/2, CP[i,j], width=width, color='k')
+				plt.bar(j+1+width/2, OAT[i,j], width=width, color='gray')
+			if vs[i,j]!=-1: # -1 means no sensitivity
+				plt.text(j+1-width*0.5, max(CP[i,j],OAT[i,j])+ylim[i]*0.05, str(round(vs[i,j]*100))+'%', fontsize=fs, fontweight=fw, color='gray')
+			
+		# y lim
+		plt.ylim([0,ylim[i]*1.3])
+		# y label
+		if i==0:
+			plt.ylabel('dAOD/dx%', fontsize=fs, fontweight=fw)
+		elif i==1:
+			plt.ylabel('dSSA/dx%', fontsize=fs, fontweight=fw)
+		else:
+			plt.ylabel('dg/dx%', fontsize=fs, fontweight=fw)
+		
+		# x label
+		if i==out_num-1:
+			plt.xticks(np.arange(par_num)+1, paras, fontsize=fs, fontweight=fw, rotation=rotation, horizontalalignment='right')
+		else:
+			plt.xticks([])
+		ax.yaxis.tick_right()
+	
+	if save:
+		plt.savefig(save_path+time.strftime('%Y%m%d%H%M%S', time.localtime())+'_SA.pdf')
+	else:
+		plt.show()
+
 if __name__ == '__main__':
 	paras = []
 	paras.append('n')
-	paras.append('nI')
-	paras.append('nI2')
+	paras.append('nH1')
 	paras.append('nBC')
 	paras.append('kBC')
 	paras.append('PNSD')
 	paras.append('MS')
-	#paras.append('VD')
+	paras.append('MSH1')
+	paras.append('MSH2')
 	paras.append('CT')
+	paras.append('CTH1')
 	paras.append('kappa')
-	paras.append('kappaI')
-	paras.append('kappaI2')
+	paras.append('kappaH1')
 	paras.append('rhoBC')
-	#paras.append('BCPNSD')
-	#paras.append('BCPMSD')
-	paras.append('BCI')
+	paras.append('BCPNSD')
 	paras.append('BCAE')
 	
-	#plot(paras[0], 5, '230221')
-	plot_sub('230530', paras=['n', 'nI2', 'kappa'], save=False)
-	
+	#plot(paras[0], 5, '230604')
+	#plot_sub('230604', paras=['n', 'nI2', 'kappa'], save=False)
+	plot_OATvsCP('240603', 0.05, save=False)
 	
 	
 	

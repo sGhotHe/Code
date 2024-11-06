@@ -13,8 +13,8 @@
 	zcloud = 10 ! altitude of cloud layers, km
 	
 	ngrid = 50 ! sets the number of grid points, default 0
-	zgrid1 = 0.1 ! controls the resolution near the bottom of the grid, default 1
-	zgrid2 = 1 ! sets the maximum permissible step size (at the top of the grid), default 30
+	zgrid1 = 1 ! controls the resolution near the bottom of the grid, default 1
+	zgrid2 = 30 ! sets the maximum permissible step size (at the top of the grid), default 30
 	
 	nstr = 4 ! number of computational zenith angles used, default 4
 	

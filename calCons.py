@@ -8,21 +8,19 @@
 default_range = 0.3
 default_paras = [] # default parameters list
 default_paras.append('n')
-default_paras.append('nI')
-default_paras.append('nI2')
+default_paras.append('nH1')
 default_paras.append('nBC')
 default_paras.append('kBC')
 default_paras.append('PNSD')
 default_paras.append('MS')
-default_paras.append('VD')
+default_paras.append('MSH1')
+default_paras.append('MSH2')
 default_paras.append('CT')
+default_paras.append('CTH1')
 default_paras.append('kappa')
-default_paras.append('kappaI')
-default_paras.append('kappaI2')
+default_paras.append('kappaH1')
 default_paras.append('rhoBC')
 default_paras.append('BCPNSD')
-default_paras.append('BCPMSD')
-default_paras.append('BCI')
 default_paras.append('BCAE')
 
 import numpy as np
@@ -101,7 +99,7 @@ def cal(dtime, par_range, **args):
 	return infos
 
 if __name__ == '__main__':
-	Cons = cal('230604', 0.05)
+	Cons = cal('240604', 0.05)
 	print(Cons['Cons'])
 	print(default_paras)
 	
